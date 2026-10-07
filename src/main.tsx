@@ -2,9 +2,15 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import { initSentry, Sentry } from './lib/sentry'
+import { initTelegramWebApp } from './lib/telegram'
 
 // Инициализация Sentry — до рендера App, п.3.2 BLOKNOTERROR.md ТЗ
 initSentry()
+
+// Инициализация Telegram WebApp (заход 23, миграция в Mini App) — вне
+// Telegram безопасный no-op, остальные каналы (Cloudflare Pages, Capacitor)
+// не затрагивает.
+initTelegramWebApp()
 
 const style = document.createElement('style')
 style.textContent = `

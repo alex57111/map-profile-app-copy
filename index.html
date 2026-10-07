@@ -8,6 +8,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Попутчик</title>
   <link rel="manifest" href="/manifest.json" />
+  <!-- Telegram Mini App SDK — доступен только внутри Telegram WebView,
+       на обычном вебе/Capacitor просто не создаёт window.Telegram.
+       См. src/lib/telegram.ts и AGENT_LOG.md заход 23. -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <!-- MarkerCluster CDN -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
