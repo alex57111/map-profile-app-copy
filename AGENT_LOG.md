@@ -8,10 +8,13 @@
 работающий Cloudflare Pages/Capacitor продакшен. Если это читается в
 оригинальном `map-profile-app` — актуальный статус смотри в `-copy`.
 
-Текущий блок (заход 23): бутстрап Telegram Mini App — `src/lib/telegram.ts`,
-подключение SDK в `index.html`, инициализация в `main.tsx`. Код аддитивный,
-существующие каналы (веб, Capacitor) не затронуты. Подробный чеклист
-сделано/не сделано — см. заход 23 в "История изменений" внизу.
+Текущий блок (заход 23-24): бутстрап Telegram Mini App — `src/lib/telegram.ts`,
+подключение SDK в `index.html`, инициализация в `main.tsx`, + staging на
+GitHub Pages (`.github/workflows/pages-staging.yml`). Код аддитивный,
+существующие каналы (веб, Capacitor) не затронуты. ⚠️ Ждём от Alex: включить
+Settings → Pages → Source: GitHub Actions (разово, агент не может через API),
+затем указать URL в BotFather. Подробный чеклист сделано/не сделано — см.
+заходы 23 и 24 в "История изменений" внизу.
 
 Более старые незакрытые темы (актуальны и для `-copy`, перенесены без
 изменений):
@@ -601,6 +604,46 @@ TEMP DIAG, удалить вместе с импортом в LocationScreen.tsx
 ## История изменений
 (сюда после каждого блока дописывать: что сделано, какие файлы менялись,
 какие решения принял агент и почему, какие проблемы возникли)
+
+### 2026-10-07 (заход 24) — Staging на GitHub Pages для теста в Telegram
+- Задача: дать Alex HTTPS-ссылку, чтобы указать её в BotFather и открыть
+  Mini App на реальном телефоне. Оригинальный Cloudflare Pages канал
+  настроен через Git-интеграцию в самом Cloudflare (не через workflow в
+  репозитории) — доступа к Cloudflare Dashboard у агента нет, поэтому для
+  `-copy` выбран отдельный независимый канал: GitHub Pages через GitHub
+  Actions, целиком настраиваемый из репозитория.
+- Новый `.github/workflows/pages-staging.yml`: на пуш в `main` —
+  `npm ci` → `npx vite build --base=/map-profile-app-copy/` → публикация
+  через `actions/upload-pages-artifact` + `actions/deploy-pages`.
+  - `--base` передаётся флагом CLI, `vite.config.ts` НЕ менялся — под
+    корневым доменом (Cloudflare Pages) ничего не меняется, флаг влияет
+    только на этот workflow (GitHub Pages живёт в поддиректории
+    `/map-profile-app-copy/`).
+  - `VITE_USE_SUPABASE` по умолчанию `false` (mock-режим) — пока нет
+    staging Supabase credentials. Можно переопределить через
+    `vars.VITE_USE_SUPABASE` + секреты `STAGING_SUPABASE_URL`/
+    `STAGING_SUPABASE_ANON_KEY` в Settings → Secrets репозитория.
+- ⚠️ НЕ СДЕЛАНО агентом (API заблокирован для этого пути): включить
+  Source = "GitHub Actions" в Settings → Pages репозитория — разовая
+  ручная настройка, без неё воркфлоу задеплоит артефакт, но страница не
+  обслуживается. Инструкция дана Alex в чате.
+- `npx tsc --noEmit` + `npm run build -- --base=/map-profile-app-copy/`
+  локально — оба чисто.
+- После включения Pages ожидаемый URL:
+  `https://alex57111.github.io/map-profile-app-copy/`
+
+#### Что сделано (кратко)
+- [x] `.github/workflows/pages-staging.yml` — автодеплой на push в main
+- [x] Build с `--base` проверен локально, чисто
+
+#### Что НЕ сделано
+- [ ] Alex должен включить Settings → Pages → Source: GitHub Actions (один раз)
+- [ ] После включения — проверить, что workflow прошёл и URL открывается
+- [ ] Указать этот URL в BotFather (Menu Button или /newapp)
+- [ ] Manifest/иконки (`public/manifest.json`, `/icon-*.png`) используют
+      абсолютные пути `/...` — под поддиректорией GitHub Pages будут 404.
+      Для теста внутри Telegram WebView это некритично (PWA-манифест не
+      используется), но стоит иметь в виду
 
 ### 2026-10-07 (заход 23) — НОВЫЙ РЕПОЗИТОРИЙ: старт миграции в Telegram Mini App
 - ⚠️ ВАЖНО для следующей сессии: с этого захода работа ведётся в отдельном

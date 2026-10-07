@@ -1,0 +1,45 @@
+name: pages-staging
+
+# Staging-деплой для теста Telegram Mini App (заход 23/24, см. AGENT_LOG.md).
+# Отдельно от продакшен-канала на Cloudflare Pages (тот настроен на
+# оригинальном map-profile-app через Git-интеграцию Cloudflare, сюда не
+# переносился). --base нужен из-за поддиректории GitHub Pages
+# (https://<owner>.github.io/<repo>/) — vite.config.ts НЕ менялся, флаг
+# передаётся только здесь, в CI.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx vite build --base=/${{ github.event.repository.name }}/
+        env:
+          VITE_USE_SUPABASE: ${{ vars.VITE_USE_SUPABASE || 'false' }}
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
