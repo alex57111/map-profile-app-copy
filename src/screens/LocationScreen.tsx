@@ -230,6 +230,19 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
     setAutoCenter(true)
   }, [gps.position])
 
+  // Авто-возврат камеры на позицию — как в навигаторе (заход 31,
+  // AGENT_LOG.md): если пользователь увёл карту вручную (autoCenter стал
+  // false — см. handleMapMove/handleMapClick) и 5 сек не трогает экран,
+  // карта сама возвращается на GPS-позицию (handleRecenter). Пока открыта
+  // форма создания события или карточка события — не дёргаем карту.
+  const idleForRecenter = useIdleTimer(5_000)
+  useEffect(() => {
+    if (!idleForRecenter) return
+    if (autoCenter) return
+    if (addSheetOpen || selectedEventId) return
+    handleRecenter()
+  }, [idleForRecenter]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleZoomIn = useCallback(() => mapRef.current?.zoomIn(), [])
   const handleZoomOut = useCallback(() => mapRef.current?.zoomOut(), [])
 
@@ -363,24 +376,20 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
         </div>
       )}
 
-      {/* Затемняется без тапа по экрану 30 сек (заход 27) — остаётся
-          рабочей (opacity, не display/pointerEvents), чтобы тап по кнопке
-          сразу сработал, а не просто "разбудил" элемент управления. */}
+      {/* Кнопки зума +/- убраны с экрана (заход 31, AGENT_LOG.md) — по
+          просьбе Alex. ZoomControls не удалён — закомментирован, возврат
+          одной строкой при необходимости. Пинч-зум на тач-экранах и так
+          работает штатно через сам Leaflet, им управлять не требуется. */}
+      {/*
       <div style={{ opacity: idle ? 0.25 : 1, transition: "opacity 0.5s ease" }}>
         <ZoomControls zoom={zoom} minZoom={MAP_MIN_ZOOM} maxZoom={MAP_MAX_ZOOM} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} />
       </div>
-      {/* Кнопка GPS/recenter убрана с экрана (заход 30, AGENT_LOG.md) — по
-          просьбе Alex, центрирование на позиции теперь полностью
-          автоматическое (заход 29: первый GPS-фикс сам приближает и
-          центрирует карту). Компонент RecenterButton и handleRecenter не
-          удалены — закомментированы, возврат одной строкой при необходимости.
-          ⚠️ Открытый момент: если пользователь вручную отведёт карту (панорама/
-          тап), autoCenter выключается (как и раньше, handleMapMove/
-          handleMapClick) и теперь вернуться к своей позиции вручную нечем —
-          не спрашивал Alex, оставил как есть по прямому указанию "убери
-          кнопку", сообщил об этом в ответе.
-      <RecenterButton active={autoCenter} onRecenter={handleRecenter} />
       */}
+      {/* Кнопка GPS/recenter возвращена (заход 31) — затемняется без тапа
+          30 сек, как и раньше (заход 27). */}
+      <div style={{ opacity: idle ? 0.25 : 1, transition: "opacity 0.5s ease" }}>
+        <RecenterButton active={autoCenter} onRecenter={handleRecenter} />
+      </div>
       {!selecting && authStatus === 'authenticated' && <AddEventFAB onPress={handleFABPress} />}
       {!selecting && authStatus !== 'authenticated' && (
         // Вход ещё не завершён (или не удался) — показываем некликабельный
