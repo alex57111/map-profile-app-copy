@@ -117,6 +117,12 @@ export function LeafletMap({
   const destMarkerRef = useRef<L.Marker | null>(null)
   const autoCenterRef = useRef(autoCenter)
   autoCenterRef.current = autoCenter
+  // Первый фикс GPS после открытия приложения — центрируем и приближаем
+  // карту сразу на позицию пользователя (как в навигаторе), а не просто
+  // панорамируем с дефолтного зума (заход 29, AGENT_LOG.md). Дальше, пока
+  // autoCenter включён, обычное panTo без смены зума — не дёргаем зум на
+  // каждый GPS-тик.
+  const hasAutoCenteredRef = useRef(false)
   const onEventClickRef = useRef(onEventClick)
   onEventClickRef.current = onEventClick
   const onRouteClickRef = useRef(onRouteClick)
@@ -180,7 +186,14 @@ export function LeafletMap({
       ownMarkerRef.current.setLatLng(latlng)
       ownMarkerRef.current.setIcon(arrowSvg(position.heading))
     }
-    if (autoCenterRef.current) map.panTo(latlng, { animate: true, duration: 0.5 })
+    if (autoCenterRef.current) {
+      if (!hasAutoCenteredRef.current) {
+        hasAutoCenteredRef.current = true
+        map.setView(latlng, MAP_MAX_ZOOM, { animate: true, duration: 0.8 })
+      } else {
+        map.panTo(latlng, { animate: true, duration: 0.5 })
+      }
+    }
   }, [position]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Маршруты
