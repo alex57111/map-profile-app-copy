@@ -8,8 +8,14 @@ import { EventDetailSheet } from "../components/map/EventDetailSheet"
 import { EventAheadAlert } from "../components/map/EventAheadAlert"
 import { MapHUD, AddEventFAB, ZoomControls } from "../components/map/MapHUD"
 import { Speedometer } from "../components/map/Speedometer"
-import { MapSearch } from "../components/map/MapSearch"
+// Поиск адреса временно скрыт с фронтенда (заход 27, AGENT_LOG.md) — пока
+// нет голосовой навигации по маршруту, он не нужен. Компонент и его логика
+// не удалены, импорт закомментирован, чтобы легко вернуть одной строкой.
+// import { MapSearch } from "../components/map/MapSearch"
 import { NavigationPanel } from "../components/map/NavigationPanel"
+import { CitySelectAlert } from "../components/map/CitySelectAlert"
+import { CITY_OPTIONS } from "../data/cities"
+import { useIdleTimer } from "../hooks/useIdleTimer"
 import { COLORS, TAB_HEIGHT } from "../components/ui/tokens"
 import { useGPS } from "../hooks/useGPS"
 import { useMapEvents } from "../hooks/useMapEvents"
@@ -85,6 +91,41 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
   useAverageSpeedZone(gps.position, combinedEvents)
   // Шаг 1 (антирадар): не гасить экран, пока есть построенный маршрут.
   useWakeLock(activeRoute !== null)
+
+  // Затемнение второстепенных кнопок (зум/GPS) без тапа по экрану 30 сек —
+  // карта остаётся чистой на весь экран (заход 27, AGENT_LOG.md).
+  const idle = useIdleTimer(30_000)
+
+  // Алерт выбора города — один раз, через 5 сек после открытия карты, если
+  // пользователь ещё не выбирал города раньше на этом устройстве (заход 27).
+  const [citySelectOpen, setCitySelectOpen] = useState(false)
+  useEffect(() => {
+    if (gateState !== 'granted') return
+    if (localStorage.getItem('citySelection_v1') !== null) return
+    const t = setTimeout(() => setCitySelectOpen(true), 5_000)
+    return () => clearTimeout(t)
+  }, [gateState])
+
+  const applyCitySelection = useCallback((cityIds: string[]) => {
+    localStorage.setItem('citySelection_v1', JSON.stringify(cityIds))
+    setCitySelectOpen(false)
+    const map = mapRef.current
+    const cities = CITY_OPTIONS.filter((c) => cityIds.includes(c.id))
+    if (!map || cities.length === 0) return
+    setAutoCenter(false)
+    if (cities.length === 1) {
+      map.setView([cities[0].lat, cities[0].lng], cities[0].zoom, { animate: true, duration: 0.8 })
+    } else {
+      const bounds = L.latLngBounds(cities.map((c) => [c.lat, c.lng] as [number, number]))
+      map.fitBounds(bounds, { padding: [48, 48], animate: true, duration: 0.8 })
+    }
+  }, [])
+
+  const closeCitySelect = useCallback(() => {
+    // "Не сейчас" — не считаем окончательным выбором, предложим снова при
+    // следующем запуске (ничего не пишем в localStorage).
+    setCitySelectOpen(false)
+  }, [])
 
   const [autoCenter, setAutoCenter] = useState(true)
   const [pendingCoords, setPendingCoords] = useState<Coords | null>(null)
@@ -289,8 +330,31 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
         <NavigationPanel route={activeRoute} position={gps.position} onClear={handleClearRoute} />
       )}
 
+      {/* Поиск адреса скрыт (заход 27) — см. комментарий у импорта выше.
       {!alertVisible && !navActive && !selecting && (
         <MapSearch onSelect={handleSearchSelect} />
+      )}
+      */}
+
+      {!alertVisible && !navActive && !selecting && (
+        <button
+          onClick={() => setCitySelectOpen(true)}
+          style={{
+            position: "absolute", top: "calc(env(safe-area-inset-top, 0px) + 12px)", left: 12,
+            zIndex: 450, padding: "8px 14px", borderRadius: 999,
+            backgroundColor: "rgba(26,26,26,0.88)", border: "1px solid #444",
+            color: COLORS.textPrimary, fontSize: 13, fontWeight: 600,
+            cursor: "pointer", backdropFilter: "blur(8px)",
+            display: "flex", alignItems: "center", gap: 6,
+            opacity: idle ? 0.25 : 1, transition: "opacity 0.5s ease",
+          }}
+        >
+          🏙 Города
+        </button>
+      )}
+
+      {citySelectOpen && (
+        <CitySelectAlert onConfirm={applyCitySelection} onClose={closeCitySelect} />
       )}
 
       {alertVisible && (
@@ -318,8 +382,15 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
         </div>
       )}
 
-      <ZoomControls zoom={zoom} minZoom={MAP_MIN_ZOOM} maxZoom={MAP_MAX_ZOOM} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} />
-      <RecenterButton active={autoCenter} onRecenter={handleRecenter} />
+      {/* Затемняются без тапа по экрану 30 сек (заход 27) — сами остаются
+          рабочими (opacity, не display/pointerEvents), чтобы тап по кнопке
+          сразу сработал, а не просто "разбудил" элементы управления. */}
+      <div style={{ opacity: idle ? 0.25 : 1, transition: "opacity 0.5s ease" }}>
+        <ZoomControls zoom={zoom} minZoom={MAP_MIN_ZOOM} maxZoom={MAP_MAX_ZOOM} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} />
+      </div>
+      <div style={{ opacity: idle ? 0.25 : 1, transition: "opacity 0.5s ease" }}>
+        <RecenterButton active={autoCenter} onRecenter={handleRecenter} />
+      </div>
       {!selecting && authStatus === 'authenticated' && <AddEventFAB onPress={handleFABPress} />}
       {!selecting && authStatus !== 'authenticated' && (
         // Вход ещё не завершён (или не удался) — показываем некликабельный
