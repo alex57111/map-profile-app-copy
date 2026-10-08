@@ -363,15 +363,24 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
         </div>
       )}
 
-      {/* Затемняются без тапа по экрану 30 сек (заход 27) — сами остаются
-          рабочими (opacity, не display/pointerEvents), чтобы тап по кнопке
-          сразу сработал, а не просто "разбудил" элементы управления. */}
+      {/* Затемняется без тапа по экрану 30 сек (заход 27) — остаётся
+          рабочей (opacity, не display/pointerEvents), чтобы тап по кнопке
+          сразу сработал, а не просто "разбудил" элемент управления. */}
       <div style={{ opacity: idle ? 0.25 : 1, transition: "opacity 0.5s ease" }}>
         <ZoomControls zoom={zoom} minZoom={MAP_MIN_ZOOM} maxZoom={MAP_MAX_ZOOM} onZoomIn={handleZoomIn} onZoomOut={handleZoomOut} />
       </div>
-      <div style={{ opacity: idle ? 0.25 : 1, transition: "opacity 0.5s ease" }}>
-        <RecenterButton active={autoCenter} onRecenter={handleRecenter} />
-      </div>
+      {/* Кнопка GPS/recenter убрана с экрана (заход 30, AGENT_LOG.md) — по
+          просьбе Alex, центрирование на позиции теперь полностью
+          автоматическое (заход 29: первый GPS-фикс сам приближает и
+          центрирует карту). Компонент RecenterButton и handleRecenter не
+          удалены — закомментированы, возврат одной строкой при необходимости.
+          ⚠️ Открытый момент: если пользователь вручную отведёт карту (панорама/
+          тап), autoCenter выключается (как и раньше, handleMapMove/
+          handleMapClick) и теперь вернуться к своей позиции вручную нечем —
+          не спрашивал Alex, оставил как есть по прямому указанию "убери
+          кнопку", сообщил об этом в ответе.
+      <RecenterButton active={autoCenter} onRecenter={handleRecenter} />
+      */}
       {!selecting && authStatus === 'authenticated' && <AddEventFAB onPress={handleFABPress} />}
       {!selecting && authStatus !== 'authenticated' && (
         // Вход ещё не завершён (или не удался) — показываем некликабельный
