@@ -1,4 +1,5 @@
 import type { GPSPosition, GPSStatus } from '../types/geo'
+import { isInsideTelegram, getTelegramLocation, type TelegramLocationData } from '../lib/telegram'
 
 export type GPSCallback = (pos: GPSPosition) => void
 export type GPSErrorCallback = (status: GPSStatus, msg: string, code?: number) => void
@@ -53,8 +54,14 @@ class HeadingSmootherImpl {
   reset(): void { this.samples = [] }
 }
 
+// Интервал опроса Telegram LocationManager — это one-shot API (getLocation),
+// не watch, поэтому поток координат имитируется периодическим вызовом.
+const TELEGRAM_POLL_MS = 2_000
+
 export class GPSEngine {
   private watchId: number | null = null
+  private telegramPollId: ReturnType<typeof setInterval> | null = null
+  private stopped = false
   private kalman: KalmanState | null = null
   private headingSmoother = new HeadingSmootherImpl(5)
   private lastEmitTime = 0
@@ -67,6 +74,38 @@ export class GPSEngine {
   }
 
   start(): void {
+    this.stopped = false
+    // Внутри Telegram предпочитаем нативный LocationManager (Bot API 8.0+) —
+    // обычный navigator.geolocation внутри Telegram WebView во многих
+    // версиях клиента не работает (не триггерит системный запрос доступа).
+    // Если LocationManager недоступен в этом клиенте Telegram или не дал
+    // ни одной координаты — откатываемся на navigator.geolocation ниже,
+    // как и было раньше вне Telegram.
+    if (isInsideTelegram()) {
+      void this.tryStartTelegram()
+      return
+    }
+    this.startBrowserWatch()
+  }
+
+  private async tryStartTelegram(): Promise<void> {
+    const first = await getTelegramLocation()
+    if (this.stopped) return
+    if (!first) {
+      // LocationManager недоступен/нет доступа в этом клиенте — откат.
+      this.startBrowserWatch()
+      return
+    }
+    this.handleTelegramFix(first)
+    this.telegramPollId = setInterval(() => {
+      void getTelegramLocation().then((data) => {
+        if (this.stopped) return
+        if (data) this.handleTelegramFix(data)
+      })
+    }, TELEGRAM_POLL_MS)
+  }
+
+  private startBrowserWatch(): void {
     if (!navigator.geolocation) {
       this.opts.onError('denied', 'Геолокация не поддерживается устройством')
       return
@@ -79,16 +118,39 @@ export class GPSEngine {
   }
 
   stop(): void {
+    this.stopped = true
     if (this.watchId !== null) {
       navigator.geolocation.clearWatch(this.watchId)
       this.watchId = null
+    }
+    if (this.telegramPollId !== null) {
+      clearInterval(this.telegramPollId)
+      this.telegramPollId = null
     }
     this.kalman = null
     this.headingSmoother.reset()
   }
 
+  private handleTelegramFix(data: TelegramLocationData): void {
+    this.emit({
+      latitude: data.latitude,
+      longitude: data.longitude,
+      accuracy: data.horizontal_accuracy ?? 30,
+      heading: data.course ?? null,
+      speed: data.speed ?? null,
+    })
+  }
+
   private handleRaw(raw: GeolocationPosition): void {
     const { latitude, longitude, accuracy, heading, speed } = raw.coords
+    this.emit({ latitude, longitude, accuracy, heading, speed })
+  }
+
+  private emit(fix: {
+    latitude: number; longitude: number; accuracy: number
+    heading: number | null; speed: number | null
+  }): void {
+    const { latitude, longitude, accuracy, heading, speed } = fix
     if (accuracy > 100) return
     if (!this.kalman) this.kalman = { lat: latitude, lng: longitude, variance: accuracy * accuracy }
     this.kalman = kalmanUpdate(this.kalman, latitude, longitude, accuracy)

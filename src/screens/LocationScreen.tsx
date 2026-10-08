@@ -21,10 +21,12 @@ import { useAverageSpeedZone } from "../hooks/useAverageSpeedZone"
 import { useWakeLock } from "../hooks/useWakeLock"
 import { useOsmCameras } from "../hooks/useOsmCameras"
 import { useOsmSpeedZones } from "../hooks/useOsmSpeedZones"
+import { LocationPermissionGate } from "../components/map/LocationPermissionGate"
 import type { RoadEvent, EventType } from "../types/event"
 import type { Coords } from "../types/geo"
 import type { AuthState } from "../types/user"
 import { Sentry } from "../lib/sentry"
+import { isInsideTelegram, getTelegramWebApp } from "../lib/telegram"
 
 const DEFAULT_CENTER: Coords = { lat: 55.7558, lng: 37.6176 }
 
@@ -39,10 +41,29 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
   const gps = useGPS()
   const mapRef = useRef<L.Map | null>(null)
 
+  // Гейт Да/Нет — только внутри Telegram Mini App (см. AGENT_LOG.md заход 25).
+  // Вне Telegram (веб на Cloudflare Pages, Capacitor Android) поведение не
+  // меняется: геолокация запускается автоматически, как было раньше.
+  const [gateState, setGateState] = useState<'pending' | 'granted' | 'denied'>(
+    () => (isInsideTelegram() ? 'pending' : 'granted')
+  )
+
   useEffect(() => {
+    if (gateState !== 'granted') return
     gps.start()
     return () => gps.stop()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gateState])
+
+  const handleAllowLocation = useCallback(() => setGateState('granted'), [])
+  const handleDenyLocation = useCallback(() => {
+    setGateState('denied')
+    try {
+      getTelegramWebApp()?.close()
+    } catch {
+      // нет-op — если закрыть не удалось, пользователь остаётся на
+      // блокирующем экране "денай" ниже, карту всё равно не увидит
+    }
   }, [])
 
   const mapCenterRef = useRef<Coords>(DEFAULT_CENTER)
@@ -198,6 +219,21 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
   const wrapStyle: CSSProperties = {
     position: "fixed", top: 0, left: 0, right: 0,
     bottom: TAB_HEIGHT, backgroundColor: COLORS.bg, overflow: "hidden",
+  }
+
+  if (gateState === 'pending') {
+    return <LocationPermissionGate onAllow={handleAllowLocation} onDeny={handleDenyLocation} />
+  }
+  if (gateState === 'denied') {
+    // Telegram.WebApp.close() обычно срабатывает мгновенно — этот экран
+    // видно только в короткую долю секунды до закрытия, либо если close()
+    // по какой-то причине не сработал (например, тестирование в обычном
+    // браузере с вручную подставленным initData).
+    return (
+      <div style={{ ...wrapStyle, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ color: COLORS.textSecond, fontSize: 15 }}>Закрываем…</div>
+      </div>
+    )
   }
 
   return (

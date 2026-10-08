@@ -8,13 +8,23 @@
 работающий Cloudflare Pages/Capacitor продакшен. Если это читается в
 оригинальном `map-profile-app` — актуальный статус смотри в `-copy`.
 
-Текущий блок (заход 23-24): бутстрап Telegram Mini App — `src/lib/telegram.ts`,
+Текущий блок (заход 25): фикс геолокации в Telegram — нативный
+`Telegram.WebApp.LocationManager` как приоритетный источник координат
+(`src/lib/telegram.ts`, `src/engines/gps.ts`), откат на
+`navigator.geolocation` сохранён для веб/Capacitor и как fallback. Плюс
+экран-гейт Да/Нет перед картой внутри Telegram
+(`src/components/map/LocationPermissionGate.tsx`,
+`src/screens/LocationScreen.tsx`) — "Да" запускает GPS (это и есть нужный
+user gesture), "Нет" закрывает Mini App. ⚠️ НЕ проверено на реальном
+устройстве агентом — ждём теста от Alex после деплоя. Открытый вопрос:
+mock-события vs подключение настоящего Supabase к staging — ждём решения
+Alex. Подробности — заход 25 в "История изменений" внизу.
+
+Предыдущий блок (заход 23-24): бутстрап Telegram Mini App — `src/lib/telegram.ts`,
 подключение SDK в `index.html`, инициализация в `main.tsx`, + staging на
-GitHub Pages (`.github/workflows/pages-staging.yml`). Код аддитивный,
-существующие каналы (веб, Capacitor) не затронуты. ⚠️ Ждём от Alex: включить
-Settings → Pages → Source: GitHub Actions (разово, агент не может через API),
-затем указать URL в BotFather. Подробный чеклист сделано/не сделано — см.
-заходы 23 и 24 в "История изменений" внизу.
+GitHub Pages (`.github/workflows/pages-staging.yml`), Pages включён и
+проверен (Alex подтвердил, деплой живой). Код аддитивный,
+существующие каналы (веб, Capacitor) не затронуты.
 
 Более старые незакрытые темы (актуальны и для `-copy`, перенесены без
 изменений):
@@ -29,7 +39,7 @@ Settings → Pages → Source: GitHub Actions (разово, агент не м�
   SQL Editor по порядку (см. заход 17 про пароль). become_admin() на тот
   момент не проходил, причина не выяснена (заход 19).
 
-Последнее обновление: 2026-10-07 (заход 23)
+Последнее обновление: 2026-10-08 (заход 25)
 
 ## Правила работы (соблюдать всегда)
 - Не переписывать файлы целиком — только точечные правки (patch/точечные замены)
@@ -604,6 +614,73 @@ TEMP DIAG, удалить вместе с импортом в LocationScreen.tsx
 ## История изменений
 (сюда после каждого блока дописывать: что сделано, какие файлы менялись,
 какие решения принял агент и почему, какие проблемы возникли)
+
+### 2026-10-08 (заход 25) — Фикс геолокации (Telegram LocationManager) + гейт Да/Нет
+- Контекст: Alex протестировал заход 24 в реальном Telegram на телефоне.
+  Mini App открылась, карта и mock-события загрузились, но геолокация НЕ
+  определялась (кнопка GPS на карте меняла цвет по тапу — т.е. UI-состояние
+  переключалось — но координата так и не приходила). Второй момент: Alex
+  не понимал, откуда события и почему всегда Москва по умолчанию — это
+  mock-режим (VITE_USE_SUPABASE=false в staging build, 3 захардкоженных
+  события в src/lib/adapters/mock/events.ts, DEFAULT_CENTER в
+  LocationScreen.tsx/LeafletMap.tsx) — НЕ баг, уточнил у Alex, решение по
+  подключению Supabase к staging отложено до его ответа.
+- Вероятная причина геолокации: код использовал только
+  navigator.geolocation.watchPosition (обычный browser API), который в
+  WebView Telegram у многих версий клиента не триггерит системный запрос
+  доступа (известная проблема — поэтому Telegram в Bot API 8.0, апрель 2024,
+  добавил отдельный нативный Telegram.WebApp.LocationManager). Плюс
+  gps.start() вызывался автоматически на монтировании экрана, без прямого
+  тапа пользователя — в WebView это тоже может тихо блокироваться.
+- ⚠️ НЕ проверено на реальном устройстве агентом (нет Telegram-клиента в
+  песочнице) — только build + tsc чисто. Первая реальная проверка — от
+  Alex после деплоя.
+- Сделано, строго аддитивно (сигнатуры публичных методов не менялись):
+  - `src/lib/telegram.ts`: добавлены `TelegramLocationManager`/
+    `TelegramLocationData` типы, `hasTelegramLocationManager()`,
+    `getTelegramLocation()` (one-shot запрос через нативный API, Promise,
+    null если API недоступен/нет доступа — тогда вызывающий код откатывается).
+  - `src/engines/gps.ts` (GPSEngine): `start()`/`stop()` — те же сигнатуры.
+    Внутри: если `isInsideTelegram()` — сначала пробуем
+    `getTelegramLocation()`; если пришла координата — дальше опрашиваем её
+    раз в 2 сек (`TELEGRAM_POLL_MS`, LocationManager — one-shot API, не
+    watch) через тот же конвейер (Kalman-фильтр, throttling, сглаживание
+    heading), что и раньше. Если LocationManager недоступен или не дал
+    координату — откат на прежний `navigator.geolocation.watchPosition`
+    (`startBrowserWatch()`, код не менялся, только вынесен в отдельный
+    метод). Вне Telegram поведение не изменилось вообще — `start()` сразу
+    идёт в `startBrowserWatch()`, как раньше.
+    `handleRaw` сохранён (та же сигнатура), внутри теперь делегирует в новый
+    приватный `emit()` — рефакторинг без изменения поведения.
+  - Новый `src/components/map/LocationPermissionGate.tsx` — экран Да/Нет
+    (как в обычных навигаторах), ДО карты.
+  - `src/screens/LocationScreen.tsx`: `gateState` (`pending`/`granted`/
+    `denied`), по умолчанию `pending` ТОЛЬКО если `isInsideTelegram()` —
+    вне Telegram сразу `granted` (ровно прежнее поведение, карта и GPS
+    стартуют как раньше, без гейта). "Да" → `gps.start()` (нажатие это и
+    есть user gesture для системного запроса доступа). "Нет" →
+    `Telegram.WebApp.close()` + блокирующий экран на случай, если close()
+    не сработал мгновенно.
+- npm run build + npx tsc --noEmit — оба чисто.
+
+#### Что сделано (кратко)
+- [x] Telegram LocationManager как приоритетный источник координат внутри Telegram
+- [x] Откат на navigator.geolocation вне Telegram или если LocationManager недоступен
+- [x] Экран-гейт Да/Нет внутри Telegram (вне Telegram не показывается)
+- [x] "Нет" закрывает Mini App через Telegram.WebApp.close()
+
+#### Что НЕ сделано / открытые вопросы
+- [ ] Не проверено на реальном устройстве — это первое, что нужно сделать
+      после деплоя этого захода
+- [ ] Решение по mock vs настоящий Supabase для staging — ждём ответа Alex
+- [ ] TELEGRAM_POLL_MS=2000 — не согласован с Alex, дефолт по аналогии с
+      остальными интервалами в проекте; можно поменять одной константой
+- [ ] Если LocationManager в клиенте Alex есть, но `isLocationAvailable`
+      false (пользователь не давал доступ Telegram на уровне ОС) —
+      `getTelegramLocation()` вернёт null и код откатится на
+      navigator.geolocation, который, видимо, и не работал изначально
+      (см. выше) — тогда понадобится `openSettings()` или прямая
+      диагностика через Alex, что именно вернул LocationManager
 
 ### 2026-10-07 (заход 24) — Staging на GitHub Pages для теста в Telegram
 - Задача: дать Alex HTTPS-ссылку, чтобы указать её в BotFather и открыть
