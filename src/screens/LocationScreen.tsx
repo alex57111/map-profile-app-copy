@@ -14,7 +14,7 @@ import { Speedometer } from "../components/map/Speedometer"
 // import { MapSearch } from "../components/map/MapSearch"
 import { NavigationPanel } from "../components/map/NavigationPanel"
 import { CitySelectAlert } from "../components/map/CitySelectAlert"
-import { HomeScreenButton } from "../components/map/HomeScreenButton"
+import { HomeScreenGate } from "../components/map/HomeScreenGate"
 import { useIdleTimer } from "../hooks/useIdleTimer"
 import { COLORS, TAB_HEIGHT } from "../components/ui/tokens"
 import { useGPS } from "../hooks/useGPS"
@@ -32,7 +32,7 @@ import type { RoadEvent, EventType } from "../types/event"
 import type { Coords } from "../types/geo"
 import type { AuthState } from "../types/user"
 import { Sentry } from "../lib/sentry"
-import { isInsideTelegram, getTelegramWebApp } from "../lib/telegram"
+import { isInsideTelegram, getTelegramWebApp, checkHomeScreenStatus, addToHomeScreen } from "../lib/telegram"
 
 const DEFAULT_CENTER: Coords = { lat: 55.7558, lng: 37.6176 }
 
@@ -53,6 +53,21 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
   const [gateState, setGateState] = useState<'pending' | 'granted' | 'denied'>(
     () => (isInsideTelegram() ? 'pending' : 'granted')
   )
+
+  // Запрос "Добавить на главный экран?" (заход 34) — после гейта геолокации,
+  // только в Telegram и только если ярлык ещё не добавлен / API поддерживается.
+  // "Нет" — закрывает окно до следующего запуска, дальше всё как раньше.
+  const [homePromptOpen, setHomePromptOpen] = useState(false)
+  useEffect(() => {
+    if (gateState !== 'granted' || !isInsideTelegram()) return
+    let alive = true
+    checkHomeScreenStatus().then((status) => {
+      if (alive && (status === 'missed' || status === 'unknown')) setHomePromptOpen(true)
+    })
+    return () => { alive = false }
+  }, [gateState])
+  const handleHomeAllow = useCallback(() => { setHomePromptOpen(false); addToHomeScreen() }, [])
+  const handleHomeDeny = useCallback(() => setHomePromptOpen(false), [])
 
   useEffect(() => {
     if (gateState !== 'granted') return
@@ -348,7 +363,7 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
       )}
       */}
 
-      <HomeScreenButton />
+      {homePromptOpen && <HomeScreenGate onAllow={handleHomeAllow} onDeny={handleHomeDeny} />}
 
       {citySelectOpen && (
         <CitySelectAlert onConfirm={applyCitySelection} onClose={closeCitySelect} />
