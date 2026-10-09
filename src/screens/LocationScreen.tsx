@@ -25,6 +25,7 @@ import { useSpeedLimit } from "../hooks/useSpeedLimit"
 import { useRoute, type Route } from "../hooks/useRoute"
 import { useAverageSpeedZone } from "../hooks/useAverageSpeedZone"
 import { useWakeLock } from "../hooks/useWakeLock"
+import { getTrackLocation, getKeepScreenOn } from "../lib/settings"
 import { useOsmCameras } from "../hooks/useOsmCameras"
 import { useOsmSpeedZones } from "../hooks/useOsmSpeedZones"
 import { LocationPermissionGate } from "../components/map/LocationPermissionGate"
@@ -69,12 +70,17 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
   const handleHomeAllow = useCallback(() => { setHomePromptOpen(false); addToHomeScreen() }, [])
   const handleHomeDeny = useCallback(() => setHomePromptOpen(false), [])
 
+  // Переключатели из Профиля (заход 35). Вкладки Карта/Профиль взаимоисключающие
+  // (App.tsx), поэтому значения читаются при открытии Карты.
+  const [trackLocation] = useState(getTrackLocation)
+  const [keepScreenOn] = useState(getKeepScreenOn)
+
   useEffect(() => {
-    if (gateState !== 'granted') return
+    if (gateState !== 'granted' || !trackLocation) return
     gps.start()
     return () => gps.stop()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gateState])
+  }, [gateState, trackLocation])
 
   const handleAllowLocation = useCallback(() => setGateState('granted'), [])
   const handleDenyLocation = useCallback(() => {
@@ -104,12 +110,14 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
   } = useRoute()
 
   useAverageSpeedZone(gps.position, combinedEvents)
-  // Шаг 1 (антирадар): не гасить экран, пока есть построенный маршрут.
-  useWakeLock(activeRoute !== null)
+  // Не гасить экран, пока открыта Карта (заход 35) — управляется переключателем
+  // "Не выключать экран" в Профиле (по умолчанию вкл). Раньше держался только
+  // при построенном маршруте.
+  useWakeLock(keepScreenOn)
 
-  // Затемнение второстепенных кнопок (зум/GPS) без тапа по экрану 30 сек —
+  // Затемнение второстепенных кнопок (зум/GPS) без тапа по экрану 7 сек (заход 35; было 30) —
   // карта остаётся чистой на весь экран (заход 27, AGENT_LOG.md).
-  const idle = useIdleTimer(30_000)
+  const idle = useIdleTimer(7_000)
 
   // Алерт выбора города (заход 28, исправление по правке Alex — заход 27
   // делал лишнее: кнопку на экране и перенос камеры на город, этого не

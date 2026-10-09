@@ -20,3 +20,12 @@ export const T: Record<string, Record<Lang, string>> = {
   voice:      { ru: 'Голосовые оповещения', en: 'Voice alerts' },
   on:         { ru: 'Вкл', en: 'On' },
 }
+
+// Переключатели в Профиле (заход 35): по умолчанию ВКЛ, читаются экраном Карта
+// при открытии. '0' в localStorage = выключено.
+const TRACK_KEY = 'app_track_location'
+const KEEP_ON_KEY = 'app_keep_screen_on'
+export function getTrackLocation(): boolean { return localStorage.getItem(TRACK_KEY) !== '0' }
+export function setTrackLocation(v: boolean): void { localStorage.setItem(TRACK_KEY, v ? '1' : '0'); window.dispatchEvent(new CustomEvent('app-settings-change')) }
+export function getKeepScreenOn(): boolean { return localStorage.getItem(KEEP_ON_KEY) !== '0' }
+export function setKeepScreenOn(v: boolean): void { localStorage.setItem(KEEP_ON_KEY, v ? '1' : '0'); window.dispatchEvent(new CustomEvent('app-settings-change')) }

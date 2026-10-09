@@ -347,10 +347,10 @@ export function RecenterButton({ onRecenter, active }: { onRecenter: () => void;
       onPointerUp={() => { onPointerUp(); if (wasTap()) onRecenter() }}
       style={{
         position: "absolute", bottom: 80 - pos.y, right: 12 - pos.x,
-        width: 44, height: 44, borderRadius: "50%",
+        width: 48.4, height: 48.4, borderRadius: "50%",
         backgroundColor: active ? "rgba(249,115,22,0.8)" : "rgba(26,26,26,0.7)",
         border: `1px solid ${active ? "rgba(249,115,22,0.6)" : "rgba(255,255,255,0.15)"}`,
-        color: "#fff", fontSize: 20,
+        color: "#fff", fontSize: 22,
         display: "flex", alignItems: "center", justifyContent: "center",
         cursor: "grab", zIndex: 500,
         boxShadow: "0 2px 8px rgba(0,0,0,0.3)",

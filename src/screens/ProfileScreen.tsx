@@ -6,12 +6,14 @@ import { ScreenWrapper } from '../components/ui/ScreenWrapper'
 import { COLORS, FONT, SPACING, RADIUS } from '../components/ui/tokens'
 import { useAuth } from '../hooks/useAuth'
 import { useSettings } from '../hooks/useSettings'
-import { setTheme, setLang, T } from '../lib/settings'
+import { setTheme, setLang, T, getTrackLocation, setTrackLocation, getKeepScreenOn, setKeepScreenOn } from '../lib/settings'
 
 export function ProfileScreen() {
   const auth = useAuth()
   const { theme, lang } = useSettings()
   const [editing, setEditing] = useState(false)
+  const [trackLocation, setTrackLocationState] = useState(getTrackLocation)
+  const [keepScreenOn, setKeepScreenOnState] = useState(getKeepScreenOn)
   const [name, setName] = useState('')
   // Вход в админ-режим (Блок 6, become_admin RPC через AuthAdapter) —
   // простой локальный флаг, пароль нигде не сохраняется кроме самого
@@ -115,6 +117,19 @@ export function ProfileScreen() {
               </button>
             </div>
 
+            <ToggleRow
+              label={lang === "ru" ? "Отслеживать местоположение" : "Track location"}
+              checked={trackLocation}
+              onChange={(v) => { setTrackLocation(v); setTrackLocationState(v) }}
+              textPrimary={textPrimary} border={border}
+            />
+            <ToggleRow
+              label={lang === "ru" ? "Не выключать экран" : "Keep screen on"}
+              checked={keepScreenOn}
+              onChange={(v) => { setKeepScreenOn(v); setKeepScreenOnState(v) }}
+              textPrimary={textPrimary} border={border}
+            />
+
             <Row label={t("notif")} value={t("on")} textPrimary={textPrimary} textSecond={textSecond} border={border} />
             <Row label={t("voice")} value={t("on")} textPrimary={textPrimary} textSecond={textSecond} border={border} last />
           </div>
@@ -161,6 +176,22 @@ function Row({ label, value, textPrimary, textSecond, border, last }: { label: s
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: `${SPACING.sm}px ${SPACING.md}px`, borderBottom: last ? "none" : `1px solid ${border}` }}>
       <span style={{ fontSize: FONT.base, color: textPrimary }}>{label}</span>
       <span style={{ fontSize: FONT.sm, color: textSecond }}>{value}</span>
+    </div>
+  )
+}
+
+function ToggleRow({ label, checked, onChange, textPrimary, border }: { label: string; checked: boolean; onChange: (v: boolean) => void; textPrimary: string; border: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: `${SPACING.sm}px ${SPACING.md}px`, borderBottom: `1px solid ${border}` }}>
+      <span style={{ fontSize: FONT.base, color: textPrimary }}>{label}</span>
+      <button
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        style={{ width: 46, height: 26, borderRadius: 13, border: "none", padding: 0, position: "relative", cursor: "pointer", backgroundColor: checked ? COLORS.accent : "#555", transition: "background-color 0.2s", WebkitTapHighlightColor: "transparent", flexShrink: 0 }}
+      >
+        <span style={{ position: "absolute", top: 3, left: checked ? 23 : 3, width: 20, height: 20, borderRadius: "50%", backgroundColor: "#fff", transition: "left 0.2s" }} />
+      </button>
     </div>
   )
 }
