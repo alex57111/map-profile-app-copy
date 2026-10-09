@@ -2,7 +2,7 @@
 import { useEffect, useCallback, useState, useRef } from "react"
 import type { CSSProperties } from "react"
 import L from "leaflet"
-import { LeafletMap, RecenterButton, MAP_MIN_ZOOM, MAP_MAX_ZOOM } from "../components/map/LeafletMap"
+import { LeafletMap, RecenterButton, MAP_MIN_ZOOM, MAP_MAX_ZOOM, clampZoom } from "../components/map/LeafletMap"
 import { AddEventSheet } from "../components/map/AddEventSheet"
 import { EventDetailSheet } from "../components/map/EventDetailSheet"
 import { EventAheadAlert } from "../components/map/EventAheadAlert"
@@ -25,7 +25,7 @@ import { useSpeedLimit } from "../hooks/useSpeedLimit"
 import { useRoute, type Route } from "../hooks/useRoute"
 import { useAverageSpeedZone } from "../hooks/useAverageSpeedZone"
 import { useWakeLock } from "../hooks/useWakeLock"
-import { getTrackLocation, getKeepScreenOn } from "../lib/settings"
+import { getTrackLocation, getKeepScreenOn, getMapZoomPref } from "../lib/settings"
 import { useOsmCameras } from "../hooks/useOsmCameras"
 import { useOsmSpeedZones } from "../hooks/useOsmSpeedZones"
 import { LocationPermissionGate } from "../components/map/LocationPermissionGate"
@@ -36,6 +36,12 @@ import { Sentry } from "../lib/sentry"
 import { isInsideTelegram, getTelegramWebApp, checkHomeScreenStatus, addToHomeScreen } from "../lib/telegram"
 
 const DEFAULT_CENTER: Coords = { lat: 55.7558, lng: 37.6176 }
+
+// Состояние гейтов живёт на уровне модуля — на время сессии (до перезагрузки
+// Mini App), НЕ в localStorage (заход 36). Карта размонтируется при смене
+// вкладки, и без этого гейты показывались бы заново при каждом возврате.
+let sessionLocationGate: 'granted' | null = null
+let sessionHomePromptChecked = false
 
 interface LocationScreenProps {
   // Статус анонимного входа из корневого AuthProvider (см. App.tsx) — пока
@@ -52,7 +58,7 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
   // Вне Telegram (веб на Cloudflare Pages, Capacitor Android) поведение не
   // меняется: геолокация запускается автоматически, как было раньше.
   const [gateState, setGateState] = useState<'pending' | 'granted' | 'denied'>(
-    () => (isInsideTelegram() ? 'pending' : 'granted')
+    () => sessionLocationGate ?? (isInsideTelegram() ? 'pending' : 'granted')
   )
 
   // Запрос "Добавить на главный экран?" (заход 34) — после гейта геолокации,
@@ -60,7 +66,8 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
   // "Нет" — закрывает окно до следующего запуска, дальше всё как раньше.
   const [homePromptOpen, setHomePromptOpen] = useState(false)
   useEffect(() => {
-    if (gateState !== 'granted' || !isInsideTelegram()) return
+    if (gateState !== 'granted' || !isInsideTelegram() || sessionHomePromptChecked) return
+    sessionHomePromptChecked = true
     let alive = true
     checkHomeScreenStatus().then((status) => {
       if (alive && (status === 'missed' || status === 'unknown')) setHomePromptOpen(true)
@@ -82,7 +89,7 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gateState, trackLocation])
 
-  const handleAllowLocation = useCallback(() => setGateState('granted'), [])
+  const handleAllowLocation = useCallback(() => { sessionLocationGate = 'granted'; setGateState('granted') }, [])
   const handleDenyLocation = useCallback(() => {
     setGateState('denied')
     try {
@@ -249,7 +256,7 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
   const handleRecenter = useCallback(() => {
     const map = mapRef.current; if (!map) return
     if (gps.position) {
-      map.setView([gps.position.lat, gps.position.lng], MAP_MAX_ZOOM, { animate: true, duration: 0.6 })
+      map.setView([gps.position.lat, gps.position.lng], clampZoom(getMapZoomPref() ?? MAP_MAX_ZOOM), { animate: true, duration: 0.6 })
     }
     setAutoCenter(true)
   }, [gps.position])

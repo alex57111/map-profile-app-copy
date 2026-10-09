@@ -29,3 +29,15 @@ export function getTrackLocation(): boolean { return localStorage.getItem(TRACK_
 export function setTrackLocation(v: boolean): void { localStorage.setItem(TRACK_KEY, v ? '1' : '0'); window.dispatchEvent(new CustomEvent('app-settings-change')) }
 export function getKeepScreenOn(): boolean { return localStorage.getItem(KEEP_ON_KEY) !== '0' }
 export function setKeepScreenOn(v: boolean): void { localStorage.setItem(KEEP_ON_KEY, v ? '1' : '0'); window.dispatchEvent(new CustomEvent('app-settings-change')) }
+
+// Зум, выбранный пользователем (щипок), — заход 36. null = не выбирался.
+const ZOOM_KEY = 'map_zoom_pref_v1'
+export function getMapZoomPref(): number | null {
+  try {
+    const v = parseFloat(localStorage.getItem(ZOOM_KEY) ?? '')
+    return Number.isFinite(v) ? v : null
+  } catch { return null }
+}
+export function setMapZoomPref(z: number): void {
+  try { localStorage.setItem(ZOOM_KEY, String(z)) } catch { /* приватный режим — не критично */ }
+}

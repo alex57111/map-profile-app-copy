@@ -1,5 +1,6 @@
 
 import { useEffect, useRef } from "react"
+import { getMapZoomPref, setMapZoomPref } from "../../lib/settings"
 import type { CSSProperties } from "react"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
@@ -79,6 +80,7 @@ type MCGroup = any
 
 export const MAP_MIN_ZOOM = 3
 export const MAP_MAX_ZOOM = 19
+export const clampZoom = (z: number) => Math.min(MAP_MAX_ZOOM, Math.max(MAP_MIN_ZOOM, z))
 
 interface Props {
   position: GPSPosition | null
@@ -123,6 +125,7 @@ export function LeafletMap({
   // autoCenter включён, обычное panTo без смены зума — не дёргаем зум на
   // каждый GPS-тик.
   const hasAutoCenteredRef = useRef(false)
+  const suppressZoomSaveUntilRef = useRef(0)
   const onEventClickRef = useRef(onEventClick)
   onEventClickRef.current = onEventClick
   const onRouteClickRef = useRef(onRouteClick)
@@ -140,7 +143,7 @@ export function LeafletMap({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
     const map = L.map(containerRef.current, {
-      center: DEFAULT_CENTER, zoom: 14,
+      center: DEFAULT_CENTER, zoom: clampZoom(getMapZoomPref() ?? 14),
       zoomControl: false, attributionControl: false,
       minZoom: MAP_MIN_ZOOM, maxZoom: MAP_MAX_ZOOM,
     })
@@ -159,7 +162,12 @@ export function LeafletMap({
 
     map.on("click", (e) => onMapClickRef.current(e.latlng.lat, e.latlng.lng))
     map.on("moveend", () => { const c = map.getCenter(); onMapMove?.({ lat: c.lat, lng: c.lng }) })
-    map.on("zoomend", () => onZoomChange?.(map.getZoom()))
+    map.on("zoomend", () => {
+      onZoomChange?.(map.getZoom())
+      // Запоминаем зум пользователя (заход 36); программный fitBounds по
+      // маршруту не считается выбором пользователя.
+      if (Date.now() > suppressZoomSaveUntilRef.current) setMapZoomPref(map.getZoom())
+    })
     mapRef.current = map
 
     return () => {
@@ -189,7 +197,7 @@ export function LeafletMap({
     if (autoCenterRef.current) {
       if (!hasAutoCenteredRef.current) {
         hasAutoCenteredRef.current = true
-        map.setView(latlng, MAP_MAX_ZOOM, { animate: true, duration: 0.8 })
+        map.setView(latlng, clampZoom(getMapZoomPref() ?? MAP_MAX_ZOOM), { animate: true, duration: 0.8 })
       } else {
         map.panTo(latlng, { animate: true, duration: 0.5 })
       }
@@ -253,6 +261,7 @@ export function LeafletMap({
 
     if (bounds.length > 0) {
       const combined = bounds.reduce((acc, b) => acc.extend(b), bounds[0]!)
+      suppressZoomSaveUntilRef.current = Date.now() + 1500
       map.fitBounds(combined, { padding: [50, 50] })
     }
   }, [routes, activeRoute, selecting, destination]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -341,22 +350,34 @@ export function LeafletMap({
 
 export function RecenterButton({ onRecenter, active }: { onRecenter: () => void; active: boolean }) {
   const { pos, onPointerDown, onPointerMove, onPointerUp, wasTap } = useDraggable({ x: 0, y: 0 })
+  // Видимая кнопка 48.4px (+10% к 44), зона нажатия +30% (62.92px) — тап мимо
+  // кружка в пределах зоны тоже срабатывает (заход 36). Внешний div держит
+  // обработчики, внутренний кружок — только рисунок.
+  const VISIBLE = 48.4
+  const HIT = VISIBLE * 1.3
+  const OFFSET = (HIT - VISIBLE) / 2
   return (
     <div
       onPointerDown={onPointerDown} onPointerMove={onPointerMove}
       onPointerUp={() => { onPointerUp(); if (wasTap()) onRecenter() }}
       style={{
-        position: "absolute", bottom: 80 - pos.y, right: 12 - pos.x,
-        width: 48.4, height: 48.4, borderRadius: "50%",
+        position: "absolute", bottom: 80 - pos.y - OFFSET, right: 12 - pos.x - OFFSET,
+        width: HIT, height: HIT,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        cursor: "grab", zIndex: 500, touchAction: "none", userSelect: "none",
+        WebkitTapHighlightColor: "transparent",
+      }}
+    >
+      <div style={{
+        width: VISIBLE, height: VISIBLE, borderRadius: "50%",
         backgroundColor: active ? "rgba(249,115,22,0.8)" : "rgba(26,26,26,0.7)",
         border: `1px solid ${active ? "rgba(249,115,22,0.6)" : "rgba(255,255,255,0.15)"}`,
         color: "#fff", fontSize: 22,
         display: "flex", alignItems: "center", justifyContent: "center",
-        cursor: "grab", zIndex: 500,
         boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-        backdropFilter: "blur(4px)", touchAction: "none", userSelect: "none",
+        backdropFilter: "blur(4px)", pointerEvents: "none",
         transition: "background-color 0.2s",
-      }}
-    >📍</div>
+      }}>📍</div>
+    </div>
   )
 }
