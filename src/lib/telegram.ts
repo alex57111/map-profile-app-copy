@@ -43,6 +43,8 @@ export interface TelegramWebApp {
   // Bot API 8.0+ — может отсутствовать в старых клиентах Telegram, поэтому
   // везде, где используется, нужна проверка на undefined.
   LocationManager?: TelegramLocationManager
+  // Bot API 7.7+ — запрет сворачивания/закрытия свайпом вниз по контенту.
+  disableVerticalSwipes?: () => void
 }
 
 declare global {
@@ -84,6 +86,8 @@ export function initTelegramWebApp(): void {
   try {
     wa.ready()
     wa.expand()
+    // Иначе свайп вниз по карте сворачивает Mini App (Bot API 7.7+).
+    wa.disableVerticalSwipes?.()
   } catch {
     // защитный catch — на случай неполной реализации API в нестандартном клиенте
   }
