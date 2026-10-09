@@ -79,8 +79,11 @@ function destIcon(): L.DivIcon {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type MCGroup = any
 
-export const MAP_MIN_ZOOM = 3
-export const MAP_MAX_ZOOM = 19
+// Границы зума (заход 39, по просьбе Alex): 7 — примерно регион (≈290 км в
+// ширину экрана), 18 — максимум детализации. Дальше карта не реагирует на щипок.
+// autoZoom.ts держит те же значения (MIN_Z/MAX_Z) — менять синхронно.
+export const MAP_MIN_ZOOM = 7
+export const MAP_MAX_ZOOM = 18
 export const clampZoom = (z: number) => Math.min(MAP_MAX_ZOOM, Math.max(MAP_MIN_ZOOM, z))
 
 interface Props {
