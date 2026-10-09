@@ -14,6 +14,7 @@ import { Speedometer } from "../components/map/Speedometer"
 // import { MapSearch } from "../components/map/MapSearch"
 import { NavigationPanel } from "../components/map/NavigationPanel"
 import { CitySelectAlert } from "../components/map/CitySelectAlert"
+import { HomeScreenButton } from "../components/map/HomeScreenButton"
 import { useIdleTimer } from "../hooks/useIdleTimer"
 import { COLORS, TAB_HEIGHT } from "../components/ui/tokens"
 import { useGPS } from "../hooks/useGPS"
@@ -346,6 +347,8 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
         <MapSearch onSelect={handleSearchSelect} />
       )}
       */}
+
+      <HomeScreenButton />
 
       {citySelectOpen && (
         <CitySelectAlert onConfirm={applyCitySelection} onClose={closeCitySelect} />

@@ -45,6 +45,11 @@ export interface TelegramWebApp {
   LocationManager?: TelegramLocationManager
   // Bot API 7.7+ — запрет сворачивания/закрытия свайпом вниз по контенту.
   disableVerticalSwipes?: () => void
+  // Bot API 8.0+ — полноэкранный режим (шапка Telegram становится прозрачной).
+  requestFullscreen?: () => void
+  // Bot API 8.0+ — ярлык Mini App на главный экран устройства.
+  addToHomeScreen?: () => void
+  checkHomeScreenStatus?: (callback?: (status: string) => void) => void
 }
 
 declare global {
@@ -88,6 +93,8 @@ export function initTelegramWebApp(): void {
     wa.expand()
     // Иначе свайп вниз по карте сворачивает Mini App (Bot API 7.7+).
     wa.disableVerticalSwipes?.()
+    // Убирает шапку Telegram (Bot API 8.0+); в старых клиентах — no-op.
+    wa.requestFullscreen?.()
   } catch {
     // защитный catch — на случай неполной реализации API в нестандартном клиенте
   }
@@ -139,4 +146,30 @@ export async function getTelegramLocation(): Promise<TelegramLocationData | null
       resolve(null)
     }
   })
+}
+
+/**
+ * Статус ярлыка на главном экране: 'unsupported' | 'unknown' | 'added' |
+ * 'missed'. Вне Telegram или в клиенте без API (< Bot API 8.0) —
+ * 'unsupported'.
+ */
+export function checkHomeScreenStatus(): Promise<string> {
+  const wa = getTelegramWebApp()
+  if (!wa?.checkHomeScreenStatus) return Promise.resolve('unsupported')
+  return new Promise((resolve) => {
+    try {
+      wa.checkHomeScreenStatus!((status) => resolve(status))
+    } catch {
+      resolve('unsupported')
+    }
+  })
+}
+
+/** Показывает системный запрос Telegram на добавление ярлыка. */
+export function addToHomeScreen(): void {
+  try {
+    getTelegramWebApp()?.addToHomeScreen?.()
+  } catch {
+    // нестандартный клиент — игнорируем
+  }
 }
