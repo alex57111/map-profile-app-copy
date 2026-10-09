@@ -27,7 +27,8 @@ import { useSpeedLimit } from "../hooks/useSpeedLimit"
 import { useRoute, type Route } from "../hooks/useRoute"
 import { useAverageSpeedZone } from "../hooks/useAverageSpeedZone"
 import { useWakeLock } from "../hooks/useWakeLock"
-import { getTrackLocation, getKeepScreenOn, getMapZoomPref } from "../lib/settings"
+import { getTrackLocation, getKeepScreenOn, getZoomOffset } from "../lib/settings"
+import { autoZoom } from "../engines/autoZoom"
 import { useOsmCameras } from "../hooks/useOsmCameras"
 import { useOsmSpeedZones } from "../hooks/useOsmSpeedZones"
 import { LocationPermissionGate } from "../components/map/LocationPermissionGate"
@@ -267,7 +268,11 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
   const handleRecenter = useCallback(() => {
     const map = mapRef.current; if (!map) return
     if (gps.position) {
-      map.setView([gps.position.lat, gps.position.lng], clampZoom(getMapZoomPref() ?? MAP_MAX_ZOOM), { animate: true, duration: 0.6 })
+      // Зум как в навигаторе (заход 38): по текущей скорости + смещение пользователя.
+      autoZoom.reset(gps.position.speed * 3.6)
+      const z = clampZoom(autoZoom.targetZoom(map.getSize().x, gps.position.lat) + getZoomOffset())
+      autoZoom.markProgrammatic()
+      map.setView([gps.position.lat, gps.position.lng], z, { animate: true, duration: 0.6 })
     }
     setAutoCenter(true)
   }, [gps.position])

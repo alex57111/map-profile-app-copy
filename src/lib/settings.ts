@@ -51,3 +51,16 @@ export function getProximityRadius(): number {
     return Number.isFinite(v) && v >= 100 && v <= 2000 ? v : 500
   } catch { return 500 }
 }
+
+// Смещение автозума, выбранное пользователем щипком (заход 38): целых уровней
+// относительно автоматического, −3..+3. 0 = как рассчитано по скорости.
+const ZOOM_OFFSET_KEY = 'map_zoom_offset_v1'
+export function getZoomOffset(): number {
+  try {
+    const v = parseInt(localStorage.getItem(ZOOM_OFFSET_KEY) ?? '', 10)
+    return Number.isFinite(v) ? Math.min(3, Math.max(-3, v)) : 0
+  } catch { return 0 }
+}
+export function setZoomOffset(v: number): void {
+  try { localStorage.setItem(ZOOM_OFFSET_KEY, String(Math.min(3, Math.max(-3, Math.round(v))))) } catch { /* ignore */ }
+}

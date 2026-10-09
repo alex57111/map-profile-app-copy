@@ -1,6 +1,7 @@
 
 import { useEffect, useRef } from "react"
-import { getMapZoomPref, setMapZoomPref } from "../../lib/settings"
+import { getMapZoomPref, setMapZoomPref, getZoomOffset, setZoomOffset } from "../../lib/settings"
+import { autoZoom } from "../../engines/autoZoom"
 import type { CSSProperties } from "react"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
@@ -125,7 +126,7 @@ export function LeafletMap({
   // autoCenter включён, обычное panTo без смены зума — не дёргаем зум на
   // каждый GPS-тик.
   const hasAutoCenteredRef = useRef(false)
-  const suppressZoomSaveUntilRef = useRef(0)
+  const prevPosRef = useRef<{ lat: number; lng: number; ts: number } | null>(null)
   const onEventClickRef = useRef(onEventClick)
   onEventClickRef.current = onEventClick
   const onRouteClickRef = useRef(onRouteClick)
@@ -164,9 +165,13 @@ export function LeafletMap({
     map.on("moveend", () => { const c = map.getCenter(); onMapMove?.({ lat: c.lat, lng: c.lng }) })
     map.on("zoomend", () => {
       onZoomChange?.(map.getZoom())
-      // Запоминаем зум пользователя (заход 36); программный fitBounds по
-      // маршруту не считается выбором пользователя.
-      if (Date.now() > suppressZoomSaveUntilRef.current) setMapZoomPref(map.getZoom())
+      // Зум пользователя (щипок) запоминаем (заходы 36, 38): абсолютный — для
+      // стартового вида карты, и смещение от автозума по скорости — для
+      // следования за GPS. Программный зум (автозум, fitBounds) не считается.
+      if (!autoZoom.isProgrammatic()) {
+        setMapZoomPref(map.getZoom())
+        if (autoZoom.currentBase !== null) setZoomOffset(map.getZoom() - autoZoom.currentBase)
+      }
     })
     mapRef.current = map
 
@@ -194,10 +199,29 @@ export function LeafletMap({
       ownMarkerRef.current.setLatLng(latlng)
       ownMarkerRef.current.setIcon(arrowSvg(position.heading))
     }
+    // Скорость для автозума: берём большую из заявленной и вычисленной по
+    // смещению между фиксами (Telegram LocationManager может отдавать speed=0).
+    const prev = prevPosRef.current
+    let derivedKmh = 0
+    if (prev) {
+      const dt = (position.timestamp - prev.ts) / 1000
+      if (dt > 0.5 && dt < 10) derivedKmh = (latlng.distanceTo(L.latLng(prev.lat, prev.lng)) / dt) * 3.6
+    }
+    prevPosRef.current = { lat: position.lat, lng: position.lng, ts: position.timestamp }
+    const speedKmh = Math.max(position.speed * 3.6, derivedKmh)
+
     if (autoCenterRef.current) {
+      const followZoom = () =>
+        clampZoom(autoZoom.targetZoom(map.getSize().x, position.lat) + getZoomOffset())
       if (!hasAutoCenteredRef.current) {
         hasAutoCenteredRef.current = true
-        map.setView(latlng, clampZoom(getMapZoomPref() ?? MAP_MAX_ZOOM), { animate: true, duration: 0.8 })
+        autoZoom.reset(speedKmh)
+        autoZoom.markProgrammatic()
+        map.setView(latlng, followZoom(), { animate: true, duration: 0.8 })
+      } else if (autoZoom.update(speedKmh, Date.now())) {
+        // Уровень скорости сменился (город ↔ трасса) — плавно меняем зум.
+        autoZoom.markProgrammatic()
+        map.setView(latlng, followZoom(), { animate: true, duration: 0.6 })
       } else {
         map.panTo(latlng, { animate: true, duration: 0.5 })
       }
@@ -261,7 +285,7 @@ export function LeafletMap({
 
     if (bounds.length > 0) {
       const combined = bounds.reduce((acc, b) => acc.extend(b), bounds[0]!)
-      suppressZoomSaveUntilRef.current = Date.now() + 1500
+      autoZoom.markProgrammatic()
       map.fitBounds(combined, { padding: [50, 50] })
     }
   }, [routes, activeRoute, selecting, destination]) // eslint-disable-line react-hooks/exhaustive-deps
