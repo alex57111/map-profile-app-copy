@@ -14,8 +14,8 @@ const TIERS: Tier[] = [
 const HYST_KMH = 5 // запас вокруг порога скорости — против дребезга уровней
 const DWELL_MS = 4_000 // новый уровень должен продержаться, прежде чем менять зум
 // Синхронно с MAP_MIN_ZOOM / MAP_MAX_ZOOM в LeafletMap.tsx (импорт дал бы цикл).
-const MIN_Z = 7
-const MAX_Z = 18
+const MIN_Z = 10
+const MAX_Z = 19
 
 export const tierFor = (speedKmh: number): number => {
   const i = TIERS.findIndex((t) => speedKmh < t.maxKmh)
