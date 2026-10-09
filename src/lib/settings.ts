@@ -41,3 +41,13 @@ export function getMapZoomPref(): number | null {
 export function setMapZoomPref(z: number): void {
   try { localStorage.setItem(ZOOM_KEY, String(z)) } catch { /* приватный режим — не критично */ }
 }
+
+// Радиус срабатывания Proximity Alerts, м (заход 37). Пока без UI — читается
+// при открытии Карты; по умолчанию 500.
+const PROX_R_KEY = 'app_proximity_radius_m'
+export function getProximityRadius(): number {
+  try {
+    const v = parseFloat(localStorage.getItem(PROX_R_KEY) ?? '')
+    return Number.isFinite(v) && v >= 100 && v <= 2000 ? v : 500
+  } catch { return 500 }
+}

@@ -21,6 +21,8 @@ import { useGPS } from "../hooks/useGPS"
 import { useMapEvents } from "../hooks/useMapEvents"
 import { usePresence } from "../hooks/usePresence"
 import { useEventsAhead } from "../hooks/useEventsAhead"
+import { useProximityAlerts } from "../hooks/useProximityAlerts"
+import { ProximityToast } from "../components/map/ProximityToast"
 import { useSpeedLimit } from "../hooks/useSpeedLimit"
 import { useRoute, type Route } from "../hooks/useRoute"
 import { useAverageSpeedZone } from "../hooks/useAverageSpeedZone"
@@ -36,6 +38,7 @@ import { Sentry } from "../lib/sentry"
 import { isInsideTelegram, getTelegramWebApp, checkHomeScreenStatus, addToHomeScreen } from "../lib/telegram"
 
 const DEFAULT_CENTER: Coords = { lat: 55.7558, lng: 37.6176 }
+const NO_EVENTS: RoadEvent[] = []
 
 // Состояние гейтов живёт на уровне модуля — на время сессии (до перезагрузки
 // Mini App), НЕ в localStorage (заход 36). Карта размонтируется при смене
@@ -108,7 +111,15 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
   const { onlineUsers } = usePresence(gps.position)
   const osmZones = useOsmSpeedZones(mapCenter)
   const combinedEvents = [...events, ...osmZones]
-  const { alerts, dismiss } = useEventsAhead(gps.position, combinedEvents)
+  // Оповещения о событиях (заход 37). Основной — новый модуль
+  // useProximityAlerts (срабатывание по пересечению радиуса). Старый
+  // useEventsAhead остаётся подключённым, но получает пустой список событий,
+  // пока новый здоров — иначе дублировались бы звук/вибро. Если новый упал
+  // (proximity.failed), старому возвращаются события, и он работает как раньше.
+  const proximity = useProximityAlerts(gps.position, combinedEvents)
+  const legacy = useEventsAhead(gps.position, proximity.failed ? combinedEvents : NO_EVENTS)
+  const alerts = proximity.failed ? legacy.alerts : proximity.alerts
+  const dismiss = proximity.failed ? legacy.dismiss : proximity.dismiss
   const speedLimit = useSpeedLimit(gps.position)
   const osmCameras = useOsmCameras(mapCenter)
   const {
@@ -384,8 +395,9 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
         <CitySelectAlert onConfirm={applyCitySelection} onClose={closeCitySelect} />
       )}
 
-      {alertVisible && (
-        <EventAheadAlert alerts={alerts} onVote={handleVote} onDismiss={dismiss} />
+      {alertVisible && (proximity.failed
+        ? <EventAheadAlert alerts={alerts} onVote={handleVote} onDismiss={dismiss} />
+        : <ProximityToast alerts={proximity.alerts} onVote={handleVote} onDismiss={dismiss} />
       )}
 
       {!alertVisible && !activeRoute && !selecting && (

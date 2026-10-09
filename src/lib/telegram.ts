@@ -45,6 +45,8 @@ export interface TelegramWebApp {
   LocationManager?: TelegramLocationManager
   // Bot API 7.7+ — запрет сворачивания/закрытия свайпом вниз по контенту.
   disableVerticalSwipes?: () => void
+  // Bot API 6.1+ — тактильная отдача.
+  HapticFeedback?: { notificationOccurred: (type: 'error' | 'success' | 'warning') => void }
   // Bot API 8.0+ — полноэкранный режим (шапка Telegram становится прозрачной).
   requestFullscreen?: () => void
   // Bot API 8.0+ — ярлык Mini App на главный экран устройства.
