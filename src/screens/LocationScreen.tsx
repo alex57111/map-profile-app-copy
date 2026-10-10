@@ -113,7 +113,7 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
   const [zoom, setZoom] = useState(14)
 
   const { events, createEvent, voteOnEvent, confirmEventRelevant, creating } = useMapEvents(null)
-  const { onlineUsers } = usePresence(gps.position)
+  const { onlineUsers, onlineCount } = usePresence(gps.position)
   const osmZones = useOsmSpeedZones(mapCenter)
   const combinedEvents = [...events, ...osmZones]
   // Оповещения о событиях (заход 37). Основной — новый модуль
@@ -398,7 +398,7 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
       )}
 
       {!alertVisible && !activeRoute && !selecting && (
-        <MapHUD gps={gps} counts={eventCounts} />
+        <MapHUD gps={gps} counts={eventCounts} onlineCount={onlineCount} />
       )}
 
       {speedKmh > 2 && !alertVisible && (

@@ -7,7 +7,9 @@ import { EVENT_TYPE_CONFIG } from '../../types/event'
 import { COUNTED_TYPES, type EventCounts } from '../../hooks/useNearbyEventCounts'
 import { gpsQuality, type GpsQuality } from '../../engines/gpsQuality'
 
-interface Props { gps: GPSState; counts: EventCounts | null }
+// Заход 53: onlineCount — число пользователей онлайн; передаётся только админу
+// (у остальных undefined/null — счётчик не показывается).
+interface Props { gps: GPSState; counts: EventCounts | null; onlineCount?: number | null }
 
 // Заход 46: цвет всей плашки = качество связи GPS (gpsQuality): зелёный —
 // уверенная, жёлтый — плохая, красный — нет связи / очень плохая (+ надпись).
@@ -27,7 +29,7 @@ type Dock = 'left' | 'right' | null
 interface HudPlace { x: number; y: number; dock: Dock }
 let hudPlace: HudPlace | null = null // null = стандартное место: вверху по центру
 
-export function MapHUD({ gps, counts }: Props) {
+export function MapHUD({ gps, counts, onlineCount }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [place, setPlaceState] = useState<HudPlace | null>(hudPlace)
   const setPlace = (p: HudPlace | null) => { hudPlace = p; setPlaceState(p) }
@@ -90,6 +92,7 @@ export function MapHUD({ gps, counts }: Props) {
       {COUNTED_TYPES.map((t) => (
         <span key={t} title="События в радиусе 50 км">{EVENT_TYPE_CONFIG[t].icon} {counts ? counts[t] : '–'}</span>
       ))}
+      {typeof onlineCount === 'number' && <span title="Пользователи онлайн">👥 {onlineCount}</span>}
       {quality === 'none' && <span style={{ fontWeight: 800 }}>нет связи</span>}
     </div>
   )
