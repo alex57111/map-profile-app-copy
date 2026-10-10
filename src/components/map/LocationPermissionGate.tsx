@@ -30,7 +30,7 @@ export function LocationPermissionGate({ onAllow, onDeny }: LocationPermissionGa
         к вашему местоположению.
       </div>
       <div style={{ fontSize: FONT.base, color: COLORS.textPrimary, maxWidth: 280, fontWeight: 600 }}>
-        Ваша позиция видна администратору, пока приложение открыто.
+        Ваша позиция видна, если приложение открыто.
       </div>
       <div style={{ display: 'flex', gap: SPACING.md, marginTop: SPACING.sm, width: '100%', maxWidth: 280 }}>
         <button
