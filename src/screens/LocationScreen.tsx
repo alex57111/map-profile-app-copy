@@ -21,6 +21,7 @@ import { useGPS } from "../hooks/useGPS"
 import { useMapEvents } from "../hooks/useMapEvents"
 import { usePresence } from "../hooks/usePresence"
 import { useNearbyEventCounts } from "../hooks/useNearbyEventCounts"
+import { loadLastFix } from "../lib/lastFix"
 import { useEventsAhead } from "../hooks/useEventsAhead"
 import { useProximityAlerts } from "../hooks/useProximityAlerts"
 import { ProximityToast } from "../components/map/ProximityToast"
@@ -105,8 +106,10 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
     }
   }, [])
 
-  const mapCenterRef = useRef<Coords>(DEFAULT_CENTER)
-  const [mapCenter, setMapCenter] = useState<Coords>(DEFAULT_CENTER)
+  // Стартовый центр — последняя известная позиция (заход 46), иначе Москва.
+  const [startCenter] = useState<Coords>(() => loadLastFix() ?? DEFAULT_CENTER)
+  const mapCenterRef = useRef<Coords>(startCenter)
+  const [mapCenter, setMapCenter] = useState<Coords>(startCenter)
   const [zoom, setZoom] = useState(14)
 
   const { events, createEvent, voteOnEvent, confirmEventRelevant, creating } = useMapEvents(null)
@@ -395,7 +398,7 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
       )}
 
       {!alertVisible && !activeRoute && !selecting && (
-        <MapHUD gps={gps} onlineCount={onlineUsers.length} counts={eventCounts} />
+        <MapHUD gps={gps} counts={eventCounts} />
       )}
 
       {speedKmh > 2 && !alertVisible && (

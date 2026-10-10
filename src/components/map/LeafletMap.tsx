@@ -12,6 +12,7 @@ import { EVENT_TYPE_CONFIG, isCameraStale } from "../../types/event"
 import { useDraggable } from "../../hooks/useDraggable"
 import type { Route } from "../../hooks/useRoute"
 import type { OsmCamera } from "../../hooks/useOsmCameras"
+import { loadLastFix } from "../../lib/lastFix"
 
 import iconUrl from "leaflet/dist/images/marker-icon.png"
 import iconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png"
@@ -147,7 +148,7 @@ export function LeafletMap({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
     const map = L.map(containerRef.current, {
-      center: DEFAULT_CENTER, zoom: clampZoom(getMapZoomPref() ?? 14),
+      center: (() => { const c = loadLastFix(); return c ? [c.lat, c.lng] as [number, number] : DEFAULT_CENTER })(), zoom: clampZoom(getMapZoomPref() ?? 14),
       zoomControl: false, attributionControl: false,
       minZoom: MAP_MIN_ZOOM, maxZoom: MAP_MAX_ZOOM,
     })
@@ -216,19 +217,28 @@ export function LeafletMap({
     const speedKmh = Math.max(position.speed * 3.6, derivedKmh)
 
     if (autoCenterRef.current) {
-      const followZoom = () =>
-        clampZoom(autoZoom.targetZoom(map.getSize().x, position.lat) + getZoomOffset())
-      if (!hasAutoCenteredRef.current) {
-        hasAutoCenteredRef.current = true
-        autoZoom.reset(speedKmh)
-        autoZoom.markProgrammatic()
-        map.setView(latlng, followZoom(), { animate: true, duration: 0.8 })
-      } else if (autoZoom.update(speedKmh, Date.now())) {
-        // Уровень скорости сменился (город ↔ трасса) — плавно меняем зум.
-        autoZoom.markProgrammatic()
-        map.setView(latlng, followZoom(), { animate: true, duration: 0.6 })
-      } else {
-        map.panTo(latlng, { animate: true, duration: 0.5 })
+      // Зум всегда конечное число в границах карты: NaN (например, от битой
+      // скорости) ломал бы setView и карта переставала центрироваться.
+      const followZoom = () => {
+        const z = clampZoom(autoZoom.targetZoom(map.getSize().x, position.lat) + getZoomOffset())
+        return Number.isFinite(z) ? z : clampZoom(14)
+      }
+      try {
+        if (!hasAutoCenteredRef.current) {
+          hasAutoCenteredRef.current = true
+          autoZoom.reset(Number.isFinite(speedKmh) ? speedKmh : 0)
+          autoZoom.markProgrammatic()
+          map.setView(latlng, followZoom(), { animate: true, duration: 0.8 })
+        } else if (autoZoom.update(Number.isFinite(speedKmh) ? speedKmh : 0, Date.now())) {
+          // Уровень скорости сменился (город ↔ трасса) — плавно меняем зум.
+          autoZoom.markProgrammatic()
+          map.setView(latlng, followZoom(), { animate: true, duration: 0.6 })
+        } else {
+          map.panTo(latlng, { animate: true, duration: 0.5 })
+        }
+      } catch {
+        // Запасной путь: хотя бы просто центрируем, без автозума.
+        try { map.setView(latlng, map.getZoom(), { animate: false }) } catch { /* карта уничтожена */ }
       }
     }
   }, [position]) // eslint-disable-line react-hooks/exhaustive-deps

@@ -1,16 +1,20 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { COLORS, FONT, SPACING, RADIUS, SAFE_TOP } from '../ui/tokens'
 import type { GPSState } from '../../types/geo'
 import { useDraggable } from '../../hooks/useDraggable'
 import { EVENT_TYPE_CONFIG } from '../../types/event'
 import { COUNTED_TYPES, type EventCounts } from '../../hooks/useNearbyEventCounts'
+import { gpsQuality, type GpsQuality } from '../../engines/gpsQuality'
 
-interface Props { gps: GPSState; onlineCount: number; counts: EventCounts | null }
+interface Props { gps: GPSState; counts: EventCounts | null }
 
-const GPS_COLOR: Record<string, string> = {
-  idle: COLORS.textDisabled, acquiring: COLORS.warning, active: COLORS.success,
-  lost: COLORS.error, denied: COLORS.error, error: COLORS.error,
+// Заход 46: цвет всей плашки = качество связи GPS (gpsQuality): зелёный —
+// уверенная, жёлтый — плохая, красный — нет связи / очень плохая (+ надпись).
+const QUALITY_BG: Record<GpsQuality, string> = {
+  good: 'rgba(22,163,74,0.88)',
+  poor: 'rgba(202,138,4,0.92)',
+  none: 'rgba(220,38,38,0.92)',
 }
 
 // Заход 45: плашка перетаскивается в любое место; у левого/правого края
@@ -23,13 +27,20 @@ type Dock = 'left' | 'right' | null
 interface HudPlace { x: number; y: number; dock: Dock }
 let hudPlace: HudPlace | null = null // null = стандартное место: вверху по центру
 
-export function MapHUD({ gps, onlineCount, counts }: Props) {
+export function MapHUD({ gps, counts }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [place, setPlaceState] = useState<HudPlace | null>(hudPlace)
   const setPlace = (p: HudPlace | null) => { hudPlace = p; setPlaceState(p) }
   const drag = useRef<{ dx: number; dy: number } | null>(null)
-  const speed = gps.position ? Math.round(gps.position.speed * 3.6) : null
   const vertical = place?.dock != null
+
+  // Качество зависит от времени (фикс «стареет»), поэтому раз в секунду пересчитываем.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1_000)
+    return () => clearInterval(id)
+  }, [])
+  const quality = gpsQuality(gps, now)
 
   const onPointerDown = (e: React.PointerEvent) => {
     const r = ref.current?.getBoundingClientRect()
@@ -53,24 +64,6 @@ export function MapHUD({ gps, onlineCount, counts }: Props) {
     : place.dock === 'right' ? { top: place.y, right: MARGIN }
     : { top: place.y, left: Math.max(MARGIN, place.x) }
 
-  const sep = vertical ? null : <span style={{ color: COLORS.border }}>|</span>
-  const gpsBlock = gps.status === 'active' && gps.position ? (
-    <>
-      <span style={{ color: COLORS.success, fontWeight: 600 }}>{speed} км/ч</span>
-      {sep}
-      <span>±{Math.round(gps.position.accuracy)}м</span>
-    </>
-  ) : (
-    <span style={{ color: GPS_COLOR[gps.status] }}>
-      {gps.status === 'acquiring' ? 'GPS...'
-        : gps.status === 'denied' ? 'GPS запрещён'
-        : gps.status === 'lost' ? 'Сигнал потерян'
-        : 'GPS'}
-    </span>
-  )
-
-  const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: SPACING.sm, flexDirection: vertical ? 'column' : 'row' }
-
   return (
     <div
       ref={ref}
@@ -81,29 +74,23 @@ export function MapHUD({ gps, onlineCount, counts }: Props) {
       style={{
         position: 'absolute',
         ...pos,
-        backgroundColor: 'rgba(15,15,15,0.75)',
+        backgroundColor: QUALITY_BG[quality],
         borderRadius: vertical ? RADIUS.lg : RADIUS.xl,
         padding: vertical ? '8px 8px' : '6px 14px',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-        fontSize: FONT.xs, color: COLORS.textPrimary,
+        display: 'flex', flexDirection: vertical ? 'column' : 'row', alignItems: 'center', gap: SPACING.sm,
+        fontSize: FONT.xs, color: '#fff', fontWeight: 600,
         zIndex: 400, whiteSpace: 'nowrap',
         backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
         boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+        transition: 'background-color 0.4s',
         cursor: 'grab', userSelect: 'none', WebkitUserSelect: 'none',
         touchAction: 'none',
       }}
     >
-      <div style={row}>
-        <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: GPS_COLOR[gps.status] ?? COLORS.textDisabled, flexShrink: 0, display: 'inline-block' }} />
-        {gpsBlock}
-        {sep}
-        <span>👤 {onlineCount}</span>
-      </div>
-      <div style={row} title="События в радиусе 50 км">
-        {COUNTED_TYPES.map((t) => (
-          <span key={t}>{EVENT_TYPE_CONFIG[t].icon} {counts ? counts[t] : '–'}</span>
-        ))}
-      </div>
+      {COUNTED_TYPES.map((t) => (
+        <span key={t} title="События в радиусе 50 км">{EVENT_TYPE_CONFIG[t].icon} {counts ? counts[t] : '–'}</span>
+      ))}
+      {quality === 'none' && <span style={{ fontWeight: 800 }}>нет связи</span>}
     </div>
   )
 }
