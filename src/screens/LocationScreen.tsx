@@ -20,6 +20,7 @@ import { COLORS, TAB_HEIGHT } from "../components/ui/tokens"
 import { useGPS } from "../hooks/useGPS"
 import { useMapEvents } from "../hooks/useMapEvents"
 import { usePresence } from "../hooks/usePresence"
+import { useNearbyEventCounts } from "../hooks/useNearbyEventCounts"
 import { useEventsAhead } from "../hooks/useEventsAhead"
 import { useProximityAlerts } from "../hooks/useProximityAlerts"
 import { ProximityToast } from "../components/map/ProximityToast"
@@ -123,6 +124,8 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
   const dismiss = proximity.failed ? legacy.dismiss : proximity.dismiss
   const speedLimit = useSpeedLimit(gps.position)
   const osmCameras = useOsmCameras(mapCenter)
+  // Счётчики событий по типам в радиусе 50 км от позиции (плашка MapHUD, заход 45).
+  const eventCounts = useNearbyEventCounts(gps.position, events, osmCameras)
   const {
     routes, activeRoute, loading: routeLoading, selecting,
     buildRoute, selectRoute, clearRoute, checkDeviation, updateProgress,
@@ -355,20 +358,6 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
         mapRef={mapRef}
       />
 
-      {/* Индикатор загрузки OSM камер */}
-      {osmCameras.length > 0 && !navActive && !alertVisible && !selecting && (
-        <div style={{
-          position: "absolute", top: 58, right: 12,
-          backgroundColor: "rgba(29,78,216,0.85)",
-          borderRadius: 12, padding: "3px 8px",
-          fontSize: 11, color: "#fff", fontWeight: 600,
-          zIndex: 420, backdropFilter: "blur(4px)",
-          display: "flex", alignItems: "center", gap: 4,
-        }}>
-          📷 {osmCameras.length} из OSM
-        </div>
-      )}
-
       {showRouteTip && (
         <div style={{
           position: "absolute", bottom: 100, left: "50%", transform: "translateX(-50%)",
@@ -406,7 +395,7 @@ export function LocationScreen({ authStatus }: LocationScreenProps) {
       )}
 
       {!alertVisible && !activeRoute && !selecting && (
-        <MapHUD gps={gps} onlineCount={onlineUsers.length} eventsCount={events.length} />
+        <MapHUD gps={gps} onlineCount={onlineUsers.length} counts={eventCounts} />
       )}
 
       {speedKmh > 2 && !alertVisible && (

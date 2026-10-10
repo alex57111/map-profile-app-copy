@@ -1,33 +1,90 @@
+import { useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { COLORS, FONT, SPACING, RADIUS, SAFE_TOP } from '../ui/tokens'
 import type { GPSState } from '../../types/geo'
 import { useDraggable } from '../../hooks/useDraggable'
+import { EVENT_TYPE_CONFIG } from '../../types/event'
+import { COUNTED_TYPES, type EventCounts } from '../../hooks/useNearbyEventCounts'
 
-interface Props { gps: GPSState; onlineCount: number; eventsCount: number }
+interface Props { gps: GPSState; onlineCount: number; counts: EventCounts | null }
 
 const GPS_COLOR: Record<string, string> = {
   idle: COLORS.textDisabled, acquiring: COLORS.warning, active: COLORS.success,
   lost: COLORS.error, denied: COLORS.error, error: COLORS.error,
 }
 
-export function MapHUD({ gps, onlineCount, eventsCount }: Props) {
-  const { pos, onPointerDown, onPointerMove, onPointerUp } = useDraggable({ x: 0, y: 0 })
+// Заход 45: плашка перетаскивается в любое место; у левого/правого края
+// экрана перестраивается в вертикальную колонку. Положение хранится на уровне
+// модуля — плашка размонтируется при показе алерта/маршрута, и без этого
+// каждый раз возвращалась бы наверх по центру.
+const EDGE_PX = 48 // палец ближе этого расстояния к краю → край
+const MARGIN = 4
+type Dock = 'left' | 'right' | null
+interface HudPlace { x: number; y: number; dock: Dock }
+let hudPlace: HudPlace | null = null // null = стандартное место: вверху по центру
+
+export function MapHUD({ gps, onlineCount, counts }: Props) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [place, setPlaceState] = useState<HudPlace | null>(hudPlace)
+  const setPlace = (p: HudPlace | null) => { hudPlace = p; setPlaceState(p) }
+  const drag = useRef<{ dx: number; dy: number } | null>(null)
   const speed = gps.position ? Math.round(gps.position.speed * 3.6) : null
+  const vertical = place?.dock != null
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    const r = ref.current?.getBoundingClientRect()
+    if (!r) return
+    drag.current = { dx: e.clientX - r.left, dy: e.clientY - r.top }
+    e.currentTarget.setPointerCapture(e.pointerId); e.stopPropagation()
+  }
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!drag.current) return
+    const w = window.innerWidth
+    const dock: Dock = e.clientX <= EDGE_PX ? 'left' : e.clientX >= w - EDGE_PX ? 'right' : null
+    const h = ref.current?.offsetHeight ?? 0
+    const y = Math.max(MARGIN, Math.min(window.innerHeight - h - MARGIN, e.clientY - drag.current.dy))
+    setPlace({ x: e.clientX - drag.current.dx, y, dock })
+  }
+  const onPointerUp = () => { drag.current = null }
+
+  const pos: CSSProperties = !place
+    ? { top: `calc(${SAFE_TOP} + 12px)`, left: '50%', transform: 'translateX(-50%)' }
+    : place.dock === 'left' ? { top: place.y, left: MARGIN }
+    : place.dock === 'right' ? { top: place.y, right: MARGIN }
+    : { top: place.y, left: Math.max(MARGIN, place.x) }
+
+  const sep = vertical ? null : <span style={{ color: COLORS.border }}>|</span>
+  const gpsBlock = gps.status === 'active' && gps.position ? (
+    <>
+      <span style={{ color: COLORS.success, fontWeight: 600 }}>{speed} км/ч</span>
+      {sep}
+      <span>±{Math.round(gps.position.accuracy)}м</span>
+    </>
+  ) : (
+    <span style={{ color: GPS_COLOR[gps.status] }}>
+      {gps.status === 'acquiring' ? 'GPS...'
+        : gps.status === 'denied' ? 'GPS запрещён'
+        : gps.status === 'lost' ? 'Сигнал потерян'
+        : 'GPS'}
+    </span>
+  )
+
+  const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: SPACING.sm, flexDirection: vertical ? 'column' : 'row' }
 
   return (
     <div
+      ref={ref}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
       style={{
         position: 'absolute',
-        top: `calc(${SAFE_TOP} + 12px)`,
-        left: '50%',
-        transform: `translate(calc(-50% + ${pos.x}px), ${pos.y}px)`,
+        ...pos,
         backgroundColor: 'rgba(15,15,15,0.75)',
-        borderRadius: RADIUS.full,
-        padding: '6px 14px',
-        display: 'flex', alignItems: 'center', gap: SPACING.sm,
+        borderRadius: vertical ? RADIUS.lg : RADIUS.xl,
+        padding: vertical ? '8px 8px' : '6px 14px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
         fontSize: FONT.xs, color: COLORS.textPrimary,
         zIndex: 400, whiteSpace: 'nowrap',
         backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
@@ -36,25 +93,17 @@ export function MapHUD({ gps, onlineCount, eventsCount }: Props) {
         touchAction: 'none',
       }}
     >
-      <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: GPS_COLOR[gps.status] ?? COLORS.textDisabled, flexShrink: 0, display: 'inline-block' }} />
-      {gps.status === 'active' && gps.position ? (
-        <>
-          <span style={{ color: COLORS.success, fontWeight: 600 }}>{speed} км/ч</span>
-          <span style={{ color: COLORS.border }}>|</span>
-          <span>±{Math.round(gps.position.accuracy)}м</span>
-        </>
-      ) : (
-        <span style={{ color: GPS_COLOR[gps.status] }}>
-          {gps.status === 'acquiring' ? 'GPS...'
-            : gps.status === 'denied' ? 'GPS запрещён'
-            : gps.status === 'lost' ? 'Сигнал потерян'
-            : 'GPS'}
-        </span>
-      )}
-      <span style={{ color: COLORS.border }}>|</span>
-      <span>👤 {onlineCount}</span>
-      <span style={{ color: COLORS.border }}>|</span>
-      <span>⚠️ {eventsCount}</span>
+      <div style={row}>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: GPS_COLOR[gps.status] ?? COLORS.textDisabled, flexShrink: 0, display: 'inline-block' }} />
+        {gpsBlock}
+        {sep}
+        <span>👤 {onlineCount}</span>
+      </div>
+      <div style={row} title="События в радиусе 50 км">
+        {COUNTED_TYPES.map((t) => (
+          <span key={t}>{EVENT_TYPE_CONFIG[t].icon} {counts ? counts[t] : '–'}</span>
+        ))}
+      </div>
     </div>
   )
 }
