@@ -151,7 +151,9 @@ export function LeafletMap({
       zoomControl: false, attributionControl: false,
       minZoom: MAP_MIN_ZOOM, maxZoom: MAP_MAX_ZOOM,
     })
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    // Единый хост без a/b/c — так требует политика тайлов OSM (заход 41); HTTP/2 и
+    // кэш по Cache-Control обеспечивает сам браузер.
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: MAP_MAX_ZOOM, attribution: "© OpenStreetMap",
     }).addTo(map)
     L.control.attribution({ position: "bottomright", prefix: false }).addTo(map)

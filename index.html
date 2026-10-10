@@ -8,6 +8,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Попутчик</title>
   <link rel="manifest" href="/manifest.json" />
+  <!-- Ускорение первой загрузки карты (заход 41): соединение с сервером тайлов
+       OSM открывается заранее. Без crossorigin — тайлы грузятся обычными <img>. -->
+  <link rel="preconnect" href="https://tile.openstreetmap.org" />
+  <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
   <!-- Telegram Mini App SDK — доступен только внутри Telegram WebView,
        на обычном вебе/Capacitor просто не создаёт window.Telegram.
        См. src/lib/telegram.ts и AGENT_LOG.md заход 23. -->
