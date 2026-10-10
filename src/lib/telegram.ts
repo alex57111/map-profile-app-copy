@@ -52,6 +52,8 @@ export interface TelegramWebApp {
   // Bot API 8.0+ — ярлык Mini App на главный экран устройства.
   addToHomeScreen?: () => void
   checkHomeScreenStatus?: (callback?: (status: string) => void) => void
+  // Открытие t.me-ссылок (группы, каналы) внутри Telegram.
+  openTelegramLink?: (url: string) => void
 }
 
 declare global {

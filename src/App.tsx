@@ -6,8 +6,20 @@ import { LocationScreen } from './screens/LocationScreen'
 import { ProfileScreen } from './screens/ProfileScreen'
 import { useSettings } from './hooks/useSettings'
 import { FONT, SAFE_BOTTOM, TAB_HEIGHT } from './components/ui/tokens'
+import { getTelegramWebApp } from './lib/telegram'
 
-type TabId = 'map' | 'profile'
+type TabId = 'map' | 'chat' | 'profile'
+
+const CHAT_URL = 'https://t.me/+xgDlkNKGa39mMjUy'
+
+// «Чат» — не экран: клик открывает группу в Telegram, активная вкладка не меняется.
+function openChat() {
+  const wa = getTelegramWebApp()
+  try {
+    if (wa?.openTelegramLink) { wa.openTelegramLink(CHAT_URL); return }
+  } catch { /* падаем в window.open */ }
+  window.open(CHAT_URL, '_blank', 'noopener')
+}
 
 function AppContent() {
   const [tab, setTab] = useState<TabId>('map')
@@ -42,9 +54,10 @@ function AppContent() {
       }}>
         {([
           { id: 'map' as TabId,     icon: '🗺️', label: isDark || true ? 'Карта' : 'Map' },
+          { id: 'chat' as TabId,    icon: '💬', label: 'ЧАТ' },
           { id: 'profile' as TabId, icon: '👤', label: isDark || true ? 'Профиль' : 'Profile' },
         ]).map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{
+          <button key={t.id} onClick={() => (t.id === 'chat' ? openChat() : setTab(t.id))} style={{
             flex: 1, display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center', gap: 2,
             background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0',
