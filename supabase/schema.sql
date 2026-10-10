@@ -379,8 +379,8 @@ grant execute on function public.become_admin(text) to authenticated;
 --     остальной логики и независимо от её исхода.
 -- (2) Старый score-based DELETE (positive_votes - negative_votes <= -1,
 --     см. историю в AGENT_LOG.md, заходы 10-12) ЗАМЕНЁН на streak-based
---     hide: порог — 1 подряд идущий голос "нет" без положительного голоса
---     следом (negative_streak, обнуляется любым голосом "да"). Событие
+--     hide: порог — 2 подряд идущих голоса "нет" без положительного голоса
+--     между ними (заход 42; было 1) (negative_streak, обнуляется любым голосом "да"). Событие
 --     больше не удаляется физически — только скрывается через
 --     expires_at в прошлое (фронт фильтрует по expires_at, см.
 --     src/lib/adapters/supabase/events.ts).
@@ -397,6 +397,7 @@ as $$
 declare
   v_is_admin boolean;
   v_recent_votes integer;
+  v_prev boolean;
 begin
   if auth.uid() is null then
     raise exception 'Not authenticated';
@@ -432,19 +433,24 @@ begin
         set negative_votes = negative_votes + 1, negative_streak = negative_streak + 1
         where id = p_event_id;
       update public.road_events set expires_at = now() - interval '1 minute'
-        where id = p_event_id and negative_streak >= 1;
+        where id = p_event_id and negative_streak >= 2;
     end if;
     return;
   end if;
 
-  -- Обычный пользователь: один голос на событие.
+  -- Обычный пользователь: тот же голос повторно — игнорируется; ДРУГОЙ голос
+  -- (было "да", стало "нет" и наоборот) — перезаписывает прежний и засчитывается
+  -- (заход 42: раньше любой повторный голос молча терялся, и 👎 после 👍 не работал).
+  select vote into v_prev from public.event_votes
+    where event_id = p_event_id and user_id = auth.uid();
+
+  if found and v_prev = p_vote then
+    return; -- тот же голос — без изменений
+  end if;
+
   insert into public.event_votes (event_id, user_id, vote)
   values (p_event_id, auth.uid(), p_vote)
-  on conflict (event_id, user_id) do nothing;
-
-  if not found then
-    return; -- уже голосовал за это событие — без изменений
-  end if;
+  on conflict (event_id, user_id) do update set vote = excluded.vote, created_at = now();
 
   if p_vote then
     update public.road_events set positive_votes = positive_votes + 1, negative_streak = 0
@@ -454,7 +460,7 @@ begin
       set negative_votes = negative_votes + 1, negative_streak = negative_streak + 1
       where id = p_event_id;
     update public.road_events set expires_at = now() - interval '1 minute'
-      where id = p_event_id and negative_streak >= 1;
+      where id = p_event_id and negative_streak >= 2;
   end if;
 end;
 $$;

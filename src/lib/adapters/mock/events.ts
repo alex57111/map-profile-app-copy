@@ -105,15 +105,15 @@ export const mockEventsAdapter: EventsAdapter = {
 
     if (!votesStore.has(userId)) votesStore.set(userId, new Map())
     const userVotes = votesStore.get(userId)!
-    if (userVotes.has(eventId)) return
+    // Заход 42: тот же голос повторно — игнор; другой голос перезаписывает прежний.
+    if (userVotes.get(eventId) === vote) return
 
     userVotes.set(eventId, vote)
     const ev = eventsStore.find((e) => e.id === eventId)
     if (!ev) return
 
     // Блок 6: score-based DELETE заменён на streak-based hide (по прямому
-    // указанию Alex — порог 1, т.е. срабатывает на первый же голос "нет"
-    // без положительного голоса следом). Событие больше не удаляется из
+    // указанию Alex — порог 2 подряд голоса "нет" без "да" между ними). Событие больше не удаляется из
     // eventsStore физически — только скрывается через expiresAt в прошлое
     // (activeEvents() его отфильтрует), синхронизировано с schema.sql.
     if (vote === "yes") {
@@ -122,7 +122,7 @@ export const mockEventsAdapter: EventsAdapter = {
     } else {
       ev.negativeVotes++
       ev.negativeStreak = (ev.negativeStreak ?? 0) + 1
-      if (ev.negativeStreak >= 1) {
+      if (ev.negativeStreak >= 2) {
         ev.expiresAt = new Date(Date.now() - 60_000).toISOString()
       }
     }
