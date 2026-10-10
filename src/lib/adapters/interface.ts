@@ -11,6 +11,9 @@ export interface AuthAdapter {
   // become_admin(p_password). Бросает исключение при неверном пароле или
   // отсутствии сессии — UI показывает общее сообщение об ошибке.
   becomeAdmin(password: string): Promise<void>
+  // Заход 43: текущий статус админа (profiles.is_admin) и выход (RPC leave_admin).
+  isAdmin(): Promise<boolean>
+  leaveAdmin(): Promise<void>
 }
 
 export interface EventsAdapter {

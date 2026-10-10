@@ -1,9 +1,9 @@
-
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { TopBar } from '../components/ui/TopBar'
 import { ScreenWrapper } from '../components/ui/ScreenWrapper'
 import { COLORS, FONT, SPACING, RADIUS } from '../components/ui/tokens'
+import { Sentry } from '../lib/sentry'
 import { useAuth } from '../hooks/useAuth'
 import { useSettings } from '../hooks/useSettings'
 import { setTheme, setLang, T, getTrackLocation, setTrackLocation, getKeepScreenOn, setKeepScreenOn } from '../lib/settings'
@@ -24,6 +24,17 @@ export function ProfileScreen() {
   const [adminLoading, setAdminLoading] = useState(false)
 
   const user = auth.status === 'authenticated' ? auth.user : null
+  const authed = auth.status === 'authenticated'
+
+  // Заход 43: реальный статус админа из БД (иначе после смены вкладки форма
+  // пароля показывалась бы снова, хотя на сервере пользователь всё ещё админ).
+  useEffect(() => {
+    if (!authed) return
+    let cancelled = false
+    auth.isAdmin().then((v) => { if (!cancelled) setIsAdmin(v) }).catch(() => {})
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed])
   const isDark = theme === 'dark'
   const cardBg = isDark ? COLORS.bgCard : '#FFFFFF'
   const bg = isDark ? COLORS.bg : '#F5F5F5'
@@ -62,6 +73,19 @@ export function ProfileScreen() {
       const fallback = lang === "ru" ? "Не удалось войти как админ — проверьте пароль" : "Failed to log in as admin — check the password"
       const raw = e instanceof Error ? e.message : String(e)
       setAdminError(raw && raw.trim() ? `TEMP DIAG: ${raw}` : fallback)
+    } finally {
+      setAdminLoading(false)
+    }
+  }
+
+  async function handleLeaveAdmin() {
+    if (adminLoading) return
+    setAdminLoading(true)
+    try {
+      await auth.leaveAdmin()
+      setIsAdmin(false)
+    } catch (e) {
+      Sentry.captureException(e, { tags: { op: 'ProfileScreen.leaveAdmin' } })
     } finally {
       setAdminLoading(false)
     }
@@ -139,7 +163,14 @@ export function ProfileScreen() {
             {isAdmin ? (
               <div style={{ display: "flex", alignItems: "center", gap: SPACING.xs, fontSize: FONT.base, color: textPrimary }}>
                 <span>🛡️</span>
-                <span>{lang === "ru" ? "Вы вошли как админ" : "Logged in as admin"}</span>
+                <span style={{ flex: 1 }}>{lang === "ru" ? "Вы вошли как админ: 1 голос «нет» убирает событие" : "Logged in as admin: 1 “no” vote removes an event"}</span>
+                <button
+                  onClick={() => void handleLeaveAdmin()}
+                  disabled={adminLoading}
+                  style={{ padding: "8px 14px", backgroundColor: isDark ? COLORS.bgElevated : "#EBEBEB", color: textSecond, border: `1px solid ${border}`, borderRadius: RADIUS.sm, fontSize: FONT.xs, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+                >
+                  {lang === "ru" ? "Выйти" : "Log out"}
+                </button>
               </div>
             ) : (
               <>

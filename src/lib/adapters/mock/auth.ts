@@ -23,6 +23,7 @@ function delay(ms: number): Promise<void> {
 // supabase/schema.sql). Нужен только чтобы кнопка "Войти как админ" в
 // ProfileScreen была тестируема локально (успех/ошибка) без реальной БД.
 const MOCK_ADMIN_PASSWORD = 'admin'
+const MOCK_ADMIN_KEY = 'mock_is_admin'
 
 export const mockAuthAdapter: AuthAdapter = {
   async signInAnonymous(): Promise<UserProfile> {
@@ -52,5 +53,12 @@ export const mockAuthAdapter: AuthAdapter = {
     if (password !== MOCK_ADMIN_PASSWORD) {
       throw new Error('Invalid request')
     }
+    localStorage.setItem(MOCK_ADMIN_KEY, '1')
+  },
+  async isAdmin(): Promise<boolean> {
+    return localStorage.getItem(MOCK_ADMIN_KEY) === '1'
+  },
+  async leaveAdmin(): Promise<void> {
+    localStorage.removeItem(MOCK_ADMIN_KEY)
   },
 }

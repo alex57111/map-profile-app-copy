@@ -44,4 +44,15 @@ export const supabaseAuthAdapter: AuthAdapter = {
     const { error } = await (db as any).rpc("become_admin", { p_password: password })
     if (error) throw new Error(error.message)
   },
+  async isAdmin(): Promise<boolean> {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return false
+    const { data } = await db.from("profiles").select("is_admin").eq("id", user.id).single()
+    return !!(data as { is_admin?: boolean } | null)?.is_admin
+  },
+  async leaveAdmin(): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (db as any).rpc("leave_admin")
+    if (error) throw new Error(error.message)
+  },
 }

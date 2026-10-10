@@ -10,6 +10,9 @@ type AuthContextValue = AuthState & {
   // AuthAdapter, как и signIn/updateProfile, а не напрямую через
   // supabase-клиент из UI.
   becomeAdmin: (password: string) => Promise<void>
+  // Заход 43: статус админа и выход из админ-режима.
+  isAdmin: () => Promise<boolean>
+  leaveAdmin: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -72,7 +75,7 @@ export function AuthProvider({ children }: Props) {
   }
 
   return (
-    <AuthContext.Provider value={{ ...state, signIn, updateProfile, becomeAdmin }}>
+    <AuthContext.Provider value={{ ...state, signIn, updateProfile, becomeAdmin, isAdmin: () => auth.isAdmin(), leaveAdmin: () => auth.leaveAdmin() }}>
       {children}
     </AuthContext.Provider>
   )
