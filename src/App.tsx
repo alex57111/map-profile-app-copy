@@ -53,9 +53,9 @@ function AppContent() {
         backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
       }}>
         {([
-          { id: 'map' as TabId,     icon: '🗺️', label: isDark || true ? 'Карта' : 'Map' },
+          { id: 'map' as TabId,     icon: '🗺️', label: 'КАРТА' },
           { id: 'chat' as TabId,    icon: '💬', label: 'ЧАТ' },
-          { id: 'profile' as TabId, icon: '👤', label: isDark || true ? 'Профиль' : 'Profile' },
+          { id: 'profile' as TabId, icon: '👤', label: 'ПРОФИЛЬ' },
         ]).map((t) => (
           <button key={t.id} onClick={() => (t.id === 'chat' ? openChat() : setTab(t.id))} style={{
             flex: 1, display: 'flex', flexDirection: 'column',
