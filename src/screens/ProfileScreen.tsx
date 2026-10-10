@@ -182,7 +182,7 @@ export function ProfileScreen() {
                     onChange={(e) => setAdminPassword(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") void handleBecomeAdmin() }}
                     placeholder={lang === "ru" ? "Пароль админа" : "Admin password"}
-                    style={{ flex: 1, padding: "8px 10px", backgroundColor: isDark ? COLORS.bgElevated : "#EBEBEB", border: `1px solid ${border}`, borderRadius: RADIUS.sm, color: textPrimary, fontSize: FONT.base, outline: "none" }}
+                    style={{ flex: 1, padding: "8px 10px", backgroundColor: isDark ? COLORS.bgElevated : "#EBEBEB", border: `1px solid ${border}`, borderRadius: RADIUS.sm, color: textPrimary, fontSize: 16, outline: "none" }}
                   />
                   <button
                     onClick={() => void handleBecomeAdmin()}

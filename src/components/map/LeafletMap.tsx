@@ -21,7 +21,8 @@ import shadowUrl from "leaflet/dist/images/marker-shadow.png"
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl
 L.Icon.Default.mergeOptions({ iconUrl, iconRetinaUrl, shadowUrl })
 
-function arrowSvg(heading: number, color = "#F97316"): L.DivIcon {
+// Заход 47: маркер собственной позиции — красный (по просьбе Alex, чтобы был заметен).
+function arrowSvg(heading: number, color = "#EF4444"): L.DivIcon {
   const svg = `<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
     <g transform="rotate(${heading}, 20, 20)">
       <polygon points="20,4 28,32 20,26 12,32" fill="${color}" stroke="white" stroke-width="1.5"/>
