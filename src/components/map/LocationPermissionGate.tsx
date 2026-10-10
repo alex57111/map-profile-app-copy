@@ -29,6 +29,9 @@ export function LocationPermissionGate({ onAllow, onDeny }: LocationPermissionGa
         Карта и оповещения о событиях на дороге работают только с доступом
         к вашему местоположению.
       </div>
+      <div style={{ fontSize: FONT.base, color: COLORS.textPrimary, maxWidth: 280, fontWeight: 600 }}>
+        Ваша позиция видна администратору, пока приложение открыто.
+      </div>
       <div style={{ display: 'flex', gap: SPACING.md, marginTop: SPACING.sm, width: '100%', maxWidth: 280 }}>
         <button
           onClick={onDeny}
